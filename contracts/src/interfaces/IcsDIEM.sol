@@ -10,6 +10,10 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
  * ERC-4626 vault: deposit DIEM → receive csDIEM shares.
  * Operator donates DIEM rewards → share price increases.
  * Composable with Pendle, Morpho, Silo, etc.
+ *
+ * Venice forward-staking: operator deploys deposited DIEM to Venice
+ * staking for compute credits. A liquid buffer is maintained for
+ * instant withdrawals.
  */
 interface IcsDIEM is IERC4626 {
     // ── Events ────────────────────────────────────────────────────────────
@@ -35,6 +39,15 @@ interface IcsDIEM is IERC4626 {
     /// @notice Emitted when admin recovers accidentally sent tokens.
     event TokenRecovered(address indexed token, address indexed to, uint256 amount);
 
+    /// @notice Emitted when operator deploys DIEM from buffer to Venice staking.
+    event DeployedToVenice(uint256 amount);
+
+    /// @notice Emitted when operator initiates buffer replenishment from Venice.
+    event BufferReplenishInitiated(uint256 amount);
+
+    /// @notice Emitted when operator completes buffer replenishment after cooldown.
+    event BufferReplenishCompleted(uint256 newBufferBalance);
+
     // ── Views ─────────────────────────────────────────────────────────────
 
     function admin() external view returns (address);
@@ -45,11 +58,29 @@ interface IcsDIEM is IERC4626 {
 
     function paused() external view returns (bool);
 
+    /// @notice Liquid DIEM available for instant withdrawals.
+    function liquidBuffer() external view returns (uint256);
+
+    /// @notice DIEM currently forward-staked on Venice via DIEM contract.
+    function forwardStaked() external view returns (uint256);
+
+    /// @notice DIEM in cooldown, pending unstake from Venice.
+    function pendingUnstake() external view returns (uint256);
+
     // ── Operator ──────────────────────────────────────────────────────────
 
     /// @notice Donate DIEM rewards to the vault, increasing share price.
     /// @param amount Amount of DIEM to donate.
     function donate(uint256 amount) external;
+
+    /// @notice Deploy idle DIEM from buffer to Venice staking.
+    function deployToVenice(uint256 amount) external;
+
+    /// @notice Start unstaking DIEM from Venice to replenish buffer.
+    function initiateBufferReplenish(uint256 amount) external;
+
+    /// @notice Complete buffer replenishment after Venice cooldown expires.
+    function completeBufferReplenish() external;
 
     // ── Admin ─────────────────────────────────────────────────────────────
 
