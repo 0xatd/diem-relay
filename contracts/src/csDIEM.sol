@@ -141,11 +141,14 @@ contract csDIEM is ERC4626, IcsDIEM {
         revert("csDIEM: use requestRedeem");
     }
 
-    /// @dev Return 0 for maxWithdraw/maxRedeem since standard paths are disabled.
+    /// @notice Always returns 0 — standard ERC-4626 withdrawals are disabled.
+    /// @dev Users must use requestRedeem()/completeRedeem() instead.
     function maxWithdraw(address) public pure override(ERC4626, IERC4626) returns (uint256) {
         return 0;
     }
 
+    /// @notice Always returns 0 — standard ERC-4626 redemptions are disabled.
+    /// @dev Users must use requestRedeem()/completeRedeem() instead.
     function maxRedeem(address) public pure override(ERC4626, IERC4626) returns (uint256) {
         return 0;
     }
@@ -205,10 +208,11 @@ contract csDIEM is ERC4626, IcsDIEM {
         req.requestedAt = block.timestamp;
         totalPendingRedemptions += assets;
 
+        // Effects — event before external call
+        emit RedemptionRequested(msg.sender, shares, assets);
+
         // Interaction — initiate Venice unstake (starts/resets cooldown)
         diemStaking.initiateUnstake(assets);
-
-        emit RedemptionRequested(msg.sender, shares, assets);
     }
 
     /**
@@ -253,13 +257,12 @@ contract csDIEM is ERC4626, IcsDIEM {
     function donate(uint256 amount) external override {
         require(amount > 0, "csDIEM: zero amount");
 
-        // Pull DIEM from donor — increases totalAssets() for all holders
-        IERC20(asset()).safeTransferFrom(msg.sender, address(this), amount);
-
-        // Forward donated DIEM to Venice
-        diemStaking.stake(amount);
-
+        // Effects — event before external calls
         emit RewardDonated(msg.sender, amount);
+
+        // Interactions — pull DIEM then forward to Venice
+        IERC20(asset()).safeTransferFrom(msg.sender, address(this), amount);
+        diemStaking.stake(amount);
     }
 
     /**
@@ -271,10 +274,11 @@ contract csDIEM is ERC4626, IcsDIEM {
         (,, uint256 pending) = diemStaking.stakedInfos(address(this));
         require(pending > 0, "csDIEM: nothing pending on Venice");
 
+        // Effects — event before external call
+        emit VeniceClaimed(msg.sender, pending);
+
         // Interaction
         diemStaking.unstake();
-
-        emit VeniceClaimed(msg.sender, pending);
     }
 
     /**
@@ -288,10 +292,11 @@ contract csDIEM is ERC4626, IcsDIEM {
 
         uint256 excess = liquid - totalPendingRedemptions;
 
+        // Effects — event before external call
+        emit ExcessRedeployed(msg.sender, excess);
+
         // Interaction — forward excess to Venice
         diemStaking.stake(excess);
-
-        emit ExcessRedeployed(msg.sender, excess);
     }
 
     // ── Admin ──────────────────────────────────────────────────────────
