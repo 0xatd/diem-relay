@@ -6,10 +6,11 @@ import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {csDIEM} from "../src/csDIEM.sol";
 import {IcsDIEM} from "../src/interfaces/IcsDIEM.sol";
+import {MockDIEMStaking} from "./mocks/MockDIEMStaking.sol";
 
 contract csDIEMTest is Test {
     csDIEM public vault;
-    ERC20Mock public diem;
+    MockDIEMStaking public diem;
 
     address admin = makeAddr("admin");
     address operator = makeAddr("operator");
@@ -21,7 +22,7 @@ contract csDIEMTest is Test {
     uint256 constant DONATION_AMOUNT = 10e18;
 
     function setUp() public {
-        diem = new ERC20Mock();
+        diem = new MockDIEMStaking();
         vault = new csDIEM(IERC20(address(diem)), admin, operator);
 
         // Fund users
@@ -409,6 +410,264 @@ contract csDIEMTest is Test {
         vault.recoverERC20(address(randomToken), admin, 100e18);
     }
 
+    // ── Venice forward-staking ──────────────────────────────────────────
+
+    function test_deployToVenice_success() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 deployAmount = 90e18;
+        vm.expectEmit(false, false, false, true);
+        emit IcsDIEM.DeployedToVenice(deployAmount);
+
+        vm.prank(operator);
+        vault.deployToVenice(deployAmount);
+
+        assertEq(vault.liquidBuffer(), 10e18);
+        assertEq(vault.forwardStaked(), 90e18);
+        assertEq(vault.pendingUnstake(), 0);
+        // totalAssets unchanged (liquidBuffer + forwardStaked = 100)
+        assertEq(vault.totalAssets(), DEPOSIT_AMOUNT);
+    }
+
+    function test_deployToVenice_revertsZero() public {
+        vm.prank(operator);
+        vm.expectRevert("csDIEM: zero amount");
+        vault.deployToVenice(0);
+    }
+
+    function test_deployToVenice_revertsNotOperator() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        vm.prank(alice);
+        vm.expectRevert("csDIEM: not operator");
+        vault.deployToVenice(10e18);
+    }
+
+    function test_deployToVenice_revertsInsufficientBuffer() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        vm.prank(operator);
+        vm.expectRevert("csDIEM: insufficient buffer");
+        vault.deployToVenice(DEPOSIT_AMOUNT + 1);
+    }
+
+    function test_deployToVenice_revertsBufferFloor() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        // Buffer floor = 5% of totalAssets = 5e18
+        // Deploying 96 leaves only 4 (below floor)
+        vm.prank(operator);
+        vm.expectRevert("csDIEM: would breach buffer floor");
+        vault.deployToVenice(96e18);
+    }
+
+    function test_deployToVenice_maxDeployRespectsFloor() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        // Max deploy = 100 - 5% = 95
+        vm.prank(operator);
+        vault.deployToVenice(95e18);
+
+        assertEq(vault.liquidBuffer(), 5e18);
+        assertEq(vault.forwardStaked(), 95e18);
+        assertEq(vault.totalAssets(), DEPOSIT_AMOUNT);
+    }
+
+    function test_deployToVenice_totalAssetsUnchanged() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 totalBefore = vault.totalAssets();
+        uint256 sharesBefore = vault.balanceOf(alice);
+        uint256 assetValueBefore = vault.convertToAssets(sharesBefore);
+
+        vm.prank(operator);
+        vault.deployToVenice(90e18);
+
+        // totalAssets unchanged — share price preserved
+        assertEq(vault.totalAssets(), totalBefore);
+        assertEq(vault.convertToAssets(sharesBefore), assetValueBefore);
+    }
+
+    function test_initiateBufferReplenish_success() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        vm.prank(operator);
+        vault.deployToVenice(90e18);
+
+        vm.expectEmit(false, false, false, true);
+        emit IcsDIEM.BufferReplenishInitiated(50e18);
+
+        vm.prank(operator);
+        vault.initiateBufferReplenish(50e18);
+
+        assertEq(vault.forwardStaked(), 40e18);
+        assertEq(vault.pendingUnstake(), 50e18);
+        // totalAssets still 100 (10 buffer + 40 staked + 50 pending)
+        assertEq(vault.totalAssets(), DEPOSIT_AMOUNT);
+    }
+
+    function test_initiateBufferReplenish_revertsZero() public {
+        vm.prank(operator);
+        vm.expectRevert("csDIEM: zero amount");
+        vault.initiateBufferReplenish(0);
+    }
+
+    function test_initiateBufferReplenish_revertsNotOperator() public {
+        vm.prank(alice);
+        vm.expectRevert("csDIEM: not operator");
+        vault.initiateBufferReplenish(10e18);
+    }
+
+    function test_completeBufferReplenish_success() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        vm.prank(operator);
+        vault.deployToVenice(90e18);
+
+        vm.prank(operator);
+        vault.initiateBufferReplenish(50e18);
+
+        // Warp past cooldown
+        vm.warp(block.timestamp + 24 hours);
+
+        vm.prank(operator);
+        vault.completeBufferReplenish();
+
+        assertEq(vault.liquidBuffer(), 60e18);
+        assertEq(vault.forwardStaked(), 40e18);
+        assertEq(vault.pendingUnstake(), 0);
+        assertEq(vault.totalAssets(), DEPOSIT_AMOUNT);
+    }
+
+    function test_completeBufferReplenish_revertsDuringCooldown() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        vm.prank(operator);
+        vault.deployToVenice(90e18);
+
+        vm.prank(operator);
+        vault.initiateBufferReplenish(50e18);
+
+        // Don't warp — cooldown active
+        vm.prank(operator);
+        vm.expectRevert("MockDIEM: cooldown active");
+        vault.completeBufferReplenish();
+    }
+
+    function test_completeBufferReplenish_revertsNotOperator() public {
+        vm.prank(alice);
+        vm.expectRevert("csDIEM: not operator");
+        vault.completeBufferReplenish();
+    }
+
+    function test_withdraw_revertsBufferInsufficient() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        // Deploy 90 to Venice
+        vm.prank(operator);
+        vault.deployToVenice(90e18);
+
+        // Alice tries to withdraw more than buffer
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        vm.expectRevert("csDIEM: buffer insufficient");
+        vault.redeem(shares, alice, alice); // tries to redeem all ~100 DIEM but only 10 in buffer
+    }
+
+    function test_withdraw_succeedsWithinBuffer() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        vm.prank(operator);
+        vault.deployToVenice(90e18);
+
+        // Alice can withdraw assets up to buffer (10 DIEM)
+        vm.prank(alice);
+        vault.withdraw(10e18, alice, alice);
+
+        // Check she received the DIEM
+        assertEq(diem.balanceOf(alice), INITIAL_BALANCE - DEPOSIT_AMOUNT + 10e18);
+    }
+
+    function test_views_liquidBuffer_forwardStaked_pendingUnstake() public {
+        // Initial: all zero
+        assertEq(vault.liquidBuffer(), 0);
+        assertEq(vault.forwardStaked(), 0);
+        assertEq(vault.pendingUnstake(), 0);
+
+        // After deposit
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+        assertEq(vault.liquidBuffer(), DEPOSIT_AMOUNT);
+
+        // After deploying
+        vm.prank(operator);
+        vault.deployToVenice(80e18);
+        assertEq(vault.liquidBuffer(), 20e18);
+        assertEq(vault.forwardStaked(), 80e18);
+
+        // After initiating replenish
+        vm.prank(operator);
+        vault.initiateBufferReplenish(30e18);
+        assertEq(vault.forwardStaked(), 50e18);
+        assertEq(vault.pendingUnstake(), 30e18);
+
+        // After completing replenish
+        vm.warp(block.timestamp + 24 hours);
+        vm.prank(operator);
+        vault.completeBufferReplenish();
+        assertEq(vault.liquidBuffer(), 50e18);
+        assertEq(vault.forwardStaked(), 50e18);
+        assertEq(vault.pendingUnstake(), 0);
+    }
+
+    function test_fullVeniceFlow_sharePricePreserved() public {
+        // 1. Alice deposits
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+        uint256 sharesAlice = vault.balanceOf(alice);
+
+        // 2. Operator donates (share price up)
+        vm.prank(operator);
+        vault.donate(DONATION_AMOUNT);
+
+        uint256 priceAfterDonation = vault.convertToAssets(1e24);
+
+        // 3. Deploy to Venice
+        vm.prank(operator);
+        vault.deployToVenice(95e18); // deploy most of 110 DIEM
+
+        // Share price unchanged by deploy
+        assertEq(vault.convertToAssets(1e24), priceAfterDonation);
+
+        // 4. Initiate and complete replenish
+        vm.prank(operator);
+        vault.initiateBufferReplenish(95e18);
+        vm.warp(block.timestamp + 24 hours);
+        vm.prank(operator);
+        vault.completeBufferReplenish();
+
+        // Share price still preserved
+        assertEq(vault.convertToAssets(1e24), priceAfterDonation);
+
+        // 5. Alice redeems all
+        vm.prank(alice);
+        uint256 assets = vault.redeem(sharesAlice, alice, alice);
+
+        // Alice gets deposit + donation (minus rounding)
+        assertApproxEqAbs(assets, DEPOSIT_AMOUNT + DONATION_AMOUNT, 1);
+    }
+
     // ── Fuzz tests ─────────────────────────────────────────────────────
 
     function testFuzz_depositWithdrawRoundTrip(uint256 amount) public {
@@ -488,5 +747,35 @@ contract csDIEMTest is Test {
         uint256 tolerance = totalValue / 1e15 + 10;
         assertApproxEqAbs(aliceAssets, aliceExpected, tolerance);
         assertApproxEqAbs(bobAssets, bobExpected, tolerance);
+    }
+
+    function testFuzz_deployToVenice_preservesTotalAssets(
+        uint256 depositAmount,
+        uint256 deployAmount
+    ) public {
+        depositAmount = bound(depositAmount, 10e18, INITIAL_BALANCE);
+
+        vm.prank(alice);
+        vault.deposit(depositAmount, alice);
+
+        // Max deployable respecting 5% floor of totalAssets
+        uint256 totalAssetsVal = vault.totalAssets();
+        uint256 floor = (totalAssetsVal * 500) / 10000;
+        uint256 maxDeploy = depositAmount - floor;
+        deployAmount = bound(deployAmount, 1, maxDeploy);
+
+        uint256 totalBefore = vault.totalAssets();
+
+        vm.prank(operator);
+        vault.deployToVenice(deployAmount);
+
+        // totalAssets unchanged
+        assertEq(vault.totalAssets(), totalBefore);
+
+        // Conservation: liquidBuffer + forwardStaked == totalAssets
+        assertEq(
+            vault.liquidBuffer() + vault.forwardStaked(),
+            vault.totalAssets()
+        );
     }
 }
