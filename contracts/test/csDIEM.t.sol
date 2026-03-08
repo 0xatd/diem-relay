@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 import "forge-std/Test.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {csDIEM} from "../src/csDIEM.sol";
 import {IcsDIEM} from "../src/interfaces/IcsDIEM.sol";
 import {MockDIEMStaking} from "./mocks/MockDIEMStaking.sol";
@@ -16,6 +17,7 @@ contract csDIEMTest is Test {
     address operator = makeAddr("operator");
     address alice = makeAddr("alice");
     address bob = makeAddr("bob");
+    address donor = makeAddr("donor");
 
     uint256 constant INITIAL_BALANCE = 1000e18;
     uint256 constant DEPOSIT_AMOUNT = 100e18;
@@ -28,14 +30,14 @@ contract csDIEMTest is Test {
         // Fund users
         diem.mint(alice, INITIAL_BALANCE);
         diem.mint(bob, INITIAL_BALANCE);
-        diem.mint(operator, INITIAL_BALANCE);
+        diem.mint(donor, INITIAL_BALANCE);
 
         // Approvals
         vm.prank(alice);
         diem.approve(address(vault), type(uint256).max);
         vm.prank(bob);
         diem.approve(address(vault), type(uint256).max);
-        vm.prank(operator);
+        vm.prank(donor);
         diem.approve(address(vault), type(uint256).max);
     }
 
@@ -61,7 +63,7 @@ contract csDIEMTest is Test {
         new csDIEM(IERC20(address(diem)), admin, address(0));
     }
 
-    // ── Deposit / Withdraw (ERC-4626) ──────────────────────────────────
+    // ── Deposit (ERC-4626) ──────────────────────────────────────────────
 
     function test_deposit() public {
         vm.prank(alice);
@@ -70,20 +72,11 @@ contract csDIEMTest is Test {
         assertGt(shares, 0);
         assertEq(vault.balanceOf(alice), shares);
         assertEq(vault.totalAssets(), DEPOSIT_AMOUNT);
-        assertEq(diem.balanceOf(address(vault)), DEPOSIT_AMOUNT);
-    }
-
-    function test_withdraw() public {
-        vm.prank(alice);
-        vault.deposit(DEPOSIT_AMOUNT, alice);
-
-        uint256 shares = vault.balanceOf(alice);
-        vm.prank(alice);
-        uint256 assets = vault.redeem(shares, alice, alice);
-
-        // OZ virtual shares/assets may cause 1 wei rounding
-        assertApproxEqAbs(assets, DEPOSIT_AMOUNT, 1);
-        assertEq(vault.balanceOf(alice), 0);
+        // DIEM forwarded to Venice — contract holds 0 liquid DIEM
+        assertEq(diem.balanceOf(address(vault)), 0);
+        // Verify Venice got it
+        (uint256 staked,,) = diem.stakedInfos(address(vault));
+        assertEq(staked, DEPOSIT_AMOUNT);
     }
 
     function test_mint() public {
@@ -98,7 +91,271 @@ contract csDIEMTest is Test {
         assertEq(vault.balanceOf(alice), sharesToMint);
     }
 
-    // ── Donate (operator) ──────────────────────────────────────────────
+    // ── Standard withdraw/redeem DISABLED ────────────────────────────────
+
+    function test_standardRedeem_reverts() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        // OZ ERC4626 checks maxRedeem (returns 0) before calling _withdraw
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC4626.ERC4626ExceededMaxRedeem.selector, alice, shares, 0
+            )
+        );
+        vault.redeem(shares, alice, alice);
+    }
+
+    function test_standardWithdraw_reverts() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        vm.prank(alice);
+        // OZ ERC4626 checks maxWithdraw (returns 0) before calling _withdraw
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC4626.ERC4626ExceededMaxWithdraw.selector, alice, 10e18, 0
+            )
+        );
+        vault.withdraw(10e18, alice, alice);
+    }
+
+    function test_maxWithdraw_returnsZero() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        assertEq(vault.maxWithdraw(alice), 0);
+    }
+
+    function test_maxRedeem_returnsZero() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        assertEq(vault.maxRedeem(alice), 0);
+    }
+
+    // ── Request Redeem ──────────────────────────────────────────────────
+
+    function test_requestRedeem_updatesState() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 shares = vault.balanceOf(alice);
+
+        vm.prank(alice);
+        uint256 assets = vault.requestRedeem(shares);
+
+        assertGt(assets, 0);
+        assertApproxEqAbs(assets, DEPOSIT_AMOUNT, 1);
+
+        // Shares burned
+        assertEq(vault.balanceOf(alice), 0);
+
+        // Pending redemption tracked
+        (uint256 pendingAssets, uint256 requestedAt) = vault.redemptionRequests(alice);
+        assertEq(pendingAssets, assets);
+        assertEq(requestedAt, block.timestamp);
+        assertEq(vault.totalPendingRedemptions(), assets);
+    }
+
+    function test_requestRedeem_emitsEvent() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 shares = vault.balanceOf(alice);
+        uint256 expectedAssets = vault.previewRedeem(shares);
+
+        vm.expectEmit(true, false, false, true);
+        emit IcsDIEM.RedemptionRequested(alice, shares, expectedAssets);
+
+        vm.prank(alice);
+        vault.requestRedeem(shares);
+    }
+
+    function test_requestRedeem_revertsZeroShares() public {
+        vm.prank(alice);
+        vm.expectRevert("csDIEM: zero shares");
+        vault.requestRedeem(0);
+    }
+
+    function test_requestRedeem_revertsInsufficientShares() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        vm.expectRevert("csDIEM: insufficient shares");
+        vault.requestRedeem(shares + 1);
+    }
+
+    function test_requestRedeem_partialAmount() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 halfShares = vault.balanceOf(alice) / 2;
+
+        vm.prank(alice);
+        uint256 assets = vault.requestRedeem(halfShares);
+
+        assertGt(vault.balanceOf(alice), 0); // Still has remaining shares
+        assertApproxEqAbs(assets, DEPOSIT_AMOUNT / 2, 1);
+    }
+
+    function test_requestRedeem_accumulates() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 totalShares = vault.balanceOf(alice);
+        uint256 firstBatch = totalShares / 3;
+        uint256 secondBatch = totalShares / 3;
+
+        // First request
+        vm.prank(alice);
+        uint256 assets1 = vault.requestRedeem(firstBatch);
+
+        // Second request — accumulates, resets timer
+        vm.warp(block.timestamp + 12 hours);
+        vm.prank(alice);
+        uint256 assets2 = vault.requestRedeem(secondBatch);
+
+        (uint256 pendingAssets, uint256 requestedAt) = vault.redemptionRequests(alice);
+        assertEq(pendingAssets, assets1 + assets2);
+        assertEq(requestedAt, block.timestamp); // Timer reset
+    }
+
+    function test_requestRedeem_allowedWhenPaused() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        vm.prank(admin);
+        vault.pause();
+
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        vault.requestRedeem(shares); // Must not revert
+
+        (uint256 amount,) = vault.redemptionRequests(alice);
+        assertGt(amount, 0);
+    }
+
+    function test_requestRedeem_initiatesVeniceUnstake() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        uint256 assets = vault.requestRedeem(shares);
+
+        // Venice should have pending unstake
+        (uint256 staked,, uint256 pending) = diem.stakedInfos(address(vault));
+        assertEq(staked, 0);
+        assertEq(pending, assets);
+    }
+
+    function test_requestRedeem_doesNotInflateSharePrice() public {
+        // Alice and Bob both deposit
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+        vm.prank(bob);
+        vault.deposit(DEPOSIT_AMOUNT, bob);
+
+        uint256 priceBefore = vault.convertToAssets(1e24);
+
+        // Alice requests full redeem
+        uint256 aliceShares = vault.balanceOf(alice);
+        vm.prank(alice);
+        vault.requestRedeem(aliceShares);
+
+        // totalAssets subtracts pending redemptions — Bob's share price shouldn't change
+        uint256 priceAfter = vault.convertToAssets(1e24);
+        assertApproxEqAbs(priceAfter, priceBefore, 1);
+    }
+
+    // ── Complete Redeem ──────────────────────────────────────────────────
+
+    function test_completeRedeem_success() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        uint256 assets = vault.requestRedeem(shares);
+
+        // Warp past delay
+        vm.warp(block.timestamp + 24 hours);
+
+        // Claim from Venice
+        vault.claimFromVenice();
+
+        uint256 balBefore = diem.balanceOf(alice);
+        vm.prank(alice);
+        vault.completeRedeem();
+
+        assertEq(diem.balanceOf(alice), balBefore + assets);
+        (uint256 pendingAssets,) = vault.redemptionRequests(alice);
+        assertEq(pendingAssets, 0);
+        assertEq(vault.totalPendingRedemptions(), 0);
+    }
+
+    function test_completeRedeem_emitsEvent() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        uint256 assets = vault.requestRedeem(shares);
+
+        vm.warp(block.timestamp + 24 hours);
+        vault.claimFromVenice();
+
+        vm.expectEmit(true, false, false, true);
+        emit IcsDIEM.RedemptionCompleted(alice, assets);
+
+        vm.prank(alice);
+        vault.completeRedeem();
+    }
+
+    function test_completeRedeem_revertsNoRequest() public {
+        vm.prank(alice);
+        vm.expectRevert("csDIEM: no pending redemption");
+        vault.completeRedeem();
+    }
+
+    function test_completeRedeem_revertsDelayNotMet() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        vault.requestRedeem(shares);
+
+        // Only 12 hours
+        vm.warp(block.timestamp + 12 hours);
+
+        vm.prank(alice);
+        vm.expectRevert("csDIEM: withdrawal delay not met");
+        vault.completeRedeem();
+    }
+
+    function test_completeRedeem_revertsInsufficientLiquidity() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        vault.requestRedeem(shares);
+
+        vm.warp(block.timestamp + 24 hours);
+
+        // Don't claim from Venice
+        vm.prank(alice);
+        vm.expectRevert("csDIEM: claim from Venice first");
+        vault.completeRedeem();
+    }
+
+    // ── Donate (permissionless) ─────────────────────────────────────────
 
     function test_donate_increasesSharePrice() public {
         // Alice deposits 100 DIEM
@@ -108,8 +365,8 @@ contract csDIEMTest is Test {
         uint256 sharesBefore = vault.balanceOf(alice);
         uint256 assetsBefore = vault.convertToAssets(sharesBefore);
 
-        // Operator donates 10 DIEM
-        vm.prank(operator);
+        // Anyone donates 10 DIEM
+        vm.prank(donor);
         vault.donate(DONATION_AMOUNT);
 
         uint256 assetsAfter = vault.convertToAssets(sharesBefore);
@@ -125,21 +382,33 @@ contract csDIEMTest is Test {
         vault.deposit(DEPOSIT_AMOUNT, alice);
 
         vm.expectEmit(true, false, false, true);
-        emit IcsDIEM.RewardDonated(operator, DONATION_AMOUNT);
+        emit IcsDIEM.RewardDonated(donor, DONATION_AMOUNT);
 
-        vm.prank(operator);
+        vm.prank(donor);
         vault.donate(DONATION_AMOUNT);
     }
 
-    function test_donate_revert_notOperator() public {
-        vm.expectRevert("csDIEM: not operator");
+    function test_donate_anyoneCanCall() public {
         vm.prank(alice);
-        vault.donate(DONATION_AMOUNT);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        // Alice can donate (not just operator)
+        vm.prank(alice);
+        vault.donate(1e18);
+
+        // Bob can donate
+        diem.mint(bob, 1e18);
+        vm.prank(bob);
+        vault.donate(1e18);
+
+        // Random donor can donate
+        vm.prank(donor);
+        vault.donate(1e18);
     }
 
     function test_donate_revert_zeroAmount() public {
         vm.expectRevert("csDIEM: zero amount");
-        vm.prank(operator);
+        vm.prank(donor);
         vault.donate(0);
     }
 
@@ -152,8 +421,8 @@ contract csDIEMTest is Test {
         vm.prank(bob);
         vault.deposit(DEPOSIT_AMOUNT, bob);
 
-        // Operator donates 10 DIEM
-        vm.prank(operator);
+        // Donor donates 10 DIEM
+        vm.prank(donor);
         vault.donate(DONATION_AMOUNT);
 
         // Each staker should get ~5 DIEM of value increase
@@ -170,8 +439,8 @@ contract csDIEMTest is Test {
         vm.prank(alice);
         vault.deposit(DEPOSIT_AMOUNT, alice);
 
-        // Operator donates 10 DIEM
-        vm.prank(operator);
+        // Donor donates 10 DIEM
+        vm.prank(donor);
         vault.donate(DONATION_AMOUNT);
 
         // Bob deposits AFTER donation — he gets fewer shares per DIEM
@@ -194,7 +463,20 @@ contract csDIEMTest is Test {
         assertApproxEqAbs(aliceAssets, DEPOSIT_AMOUNT + DONATION_AMOUNT, 1);
     }
 
-    // ── Share price monotonicity ───────────────────────────────────────
+    function test_donate_forwardsToVenice() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        vm.prank(donor);
+        vault.donate(DONATION_AMOUNT);
+
+        // Donated DIEM should be on Venice, not sitting liquid
+        assertEq(diem.balanceOf(address(vault)), 0);
+        (uint256 staked,,) = diem.stakedInfos(address(vault));
+        assertEq(staked, DEPOSIT_AMOUNT + DONATION_AMOUNT);
+    }
+
+    // ── Share price monotonicity ────────────────────────────────────────
 
     function test_sharePriceNeverDecreases() public {
         vm.prank(alice);
@@ -203,22 +485,81 @@ contract csDIEMTest is Test {
         uint256 priceBefore = vault.convertToAssets(1e24);
 
         // Donate
-        vm.prank(operator);
+        vm.prank(donor);
         vault.donate(DONATION_AMOUNT);
 
-        uint256 priceAfter = vault.convertToAssets(1e24);
-        assertGe(priceAfter, priceBefore);
+        uint256 priceAfterDonation = vault.convertToAssets(1e24);
+        assertGe(priceAfterDonation, priceBefore);
 
-        // Partial withdraw by alice
+        // Partial requestRedeem by alice
         uint256 halfShares = vault.balanceOf(alice) / 2;
         vm.prank(alice);
-        vault.redeem(halfShares, alice, alice);
+        vault.requestRedeem(halfShares);
 
-        uint256 priceAfterWithdraw = vault.convertToAssets(1e24);
-        assertGe(priceAfterWithdraw, priceBefore);
+        uint256 priceAfterRedeem = vault.convertToAssets(1e24);
+        // Share price should not decrease after requestRedeem
+        // (totalPendingRedemptions offsets the burned shares)
+        assertGe(priceAfterRedeem + 1, priceAfterDonation); // +1 for rounding
     }
 
-    // ── Pause ──────────────────────────────────────────────────────────
+    // ── Permissionless Venice Management ────────────────────────────────
+
+    function test_claimFromVenice_success() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        // Request redeem to trigger initiateUnstake
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        vault.requestRedeem(shares);
+
+        vm.warp(block.timestamp + 24 hours);
+
+        (,, uint256 pending) = diem.stakedInfos(address(vault));
+
+        vm.expectEmit(true, false, false, true);
+        emit IcsDIEM.VeniceClaimed(bob, pending);
+
+        // Anyone can call
+        vm.prank(bob);
+        vault.claimFromVenice();
+
+        assertGt(diem.balanceOf(address(vault)), 0);
+    }
+
+    function test_claimFromVenice_revertsNothingPending() public {
+        vm.expectRevert("csDIEM: nothing pending on Venice");
+        vault.claimFromVenice();
+    }
+
+    function test_redeployExcess_success() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        // Simulate excess liquid DIEM (e.g., someone accidentally sent DIEM to the vault)
+        uint256 excessAmount = 50e18;
+        diem.mint(address(vault), excessAmount);
+
+        uint256 liquid = diem.balanceOf(address(vault));
+        uint256 pending = vault.totalPendingRedemptions();
+        assertEq(pending, 0);
+        assertEq(liquid, excessAmount);
+
+        vm.expectEmit(true, false, false, true);
+        emit IcsDIEM.ExcessRedeployed(bob, excessAmount);
+
+        vm.prank(bob); // Anyone can call
+        vault.redeployExcess();
+
+        assertEq(diem.balanceOf(address(vault)), 0);
+    }
+
+    function test_redeployExcess_revertsNoExcess() public {
+        vm.expectRevert("csDIEM: no excess to redeploy");
+        vault.redeployExcess();
+    }
+
+    // ── Pause ───────────────────────────────────────────────────────────
 
     function test_pause_blocksDeposit() public {
         vm.prank(admin);
@@ -238,33 +579,20 @@ contract csDIEMTest is Test {
         vault.mint(1e24, alice);
     }
 
-    function test_pause_allowsWithdraw() public {
-        // Deposit first
+    function test_pause_allowsRequestRedeem() public {
         vm.prank(alice);
         vault.deposit(DEPOSIT_AMOUNT, alice);
 
-        // Pause
         vm.prank(admin);
         vault.pause();
 
-        // Withdraw still works
+        // requestRedeem works even when paused
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
-        uint256 assets = vault.redeem(shares, alice, alice);
-        assertApproxEqAbs(assets, DEPOSIT_AMOUNT, 1);
-    }
+        vault.requestRedeem(shares);
 
-    function test_pause_allowsRedeem() public {
-        vm.prank(alice);
-        vault.deposit(DEPOSIT_AMOUNT, alice);
-
-        vm.prank(admin);
-        vault.pause();
-
-        uint256 withdrawable = vault.maxWithdraw(alice);
-        vm.prank(alice);
-        vault.withdraw(withdrawable, alice, alice);
-        // No revert = success
+        (uint256 amount,) = vault.redemptionRequests(alice);
+        assertGt(amount, 0);
     }
 
     function test_pause_revert_notAdmin() public {
@@ -410,278 +738,143 @@ contract csDIEMTest is Test {
         vault.recoverERC20(address(randomToken), admin, 100e18);
     }
 
-    // ── Venice forward-staking ──────────────────────────────────────────
+    // ── Views ───────────────────────────────────────────────────────────
 
-    function test_deployToVenice_success() public {
+    function test_views_redemptionRequests() public {
+        (uint256 assets, uint256 requestedAt) = vault.redemptionRequests(alice);
+        assertEq(assets, 0);
+        assertEq(requestedAt, 0);
+    }
+
+    function test_views_veniceCooldownEnd() public {
+        assertEq(vault.veniceCooldownEnd(), 0);
+
         vm.prank(alice);
         vault.deposit(DEPOSIT_AMOUNT, alice);
 
-        uint256 deployAmount = 90e18;
-        vm.expectEmit(false, false, false, true);
-        emit IcsDIEM.DeployedToVenice(deployAmount);
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        vault.requestRedeem(shares);
 
-        vm.prank(operator);
-        vault.deployToVenice(deployAmount);
+        assertEq(vault.veniceCooldownEnd(), block.timestamp + 24 hours);
+    }
 
-        assertEq(vault.liquidBuffer(), 10e18);
-        assertEq(vault.forwardStaked(), 90e18);
-        assertEq(vault.pendingUnstake(), 0);
-        // totalAssets unchanged (liquidBuffer + forwardStaked = 100)
+    function test_views_WITHDRAWAL_DELAY() public view {
+        assertEq(vault.WITHDRAWAL_DELAY(), 24 hours);
+    }
+
+    function test_totalAssets_includesVeniceStaked() public {
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+
+        // All DIEM is on Venice, but totalAssets still reflects the deposit
         assertEq(vault.totalAssets(), DEPOSIT_AMOUNT);
+        assertEq(diem.balanceOf(address(vault)), 0); // No liquid DIEM
     }
 
-    function test_deployToVenice_revertsZero() public {
-        vm.prank(operator);
-        vm.expectRevert("csDIEM: zero amount");
-        vault.deployToVenice(0);
-    }
-
-    function test_deployToVenice_revertsNotOperator() public {
-        vm.prank(alice);
-        vault.deposit(DEPOSIT_AMOUNT, alice);
-
-        vm.prank(alice);
-        vm.expectRevert("csDIEM: not operator");
-        vault.deployToVenice(10e18);
-    }
-
-    function test_deployToVenice_revertsInsufficientBuffer() public {
-        vm.prank(alice);
-        vault.deposit(DEPOSIT_AMOUNT, alice);
-
-        vm.prank(operator);
-        vm.expectRevert("csDIEM: insufficient buffer");
-        vault.deployToVenice(DEPOSIT_AMOUNT + 1);
-    }
-
-    function test_deployToVenice_revertsBufferFloor() public {
-        vm.prank(alice);
-        vault.deposit(DEPOSIT_AMOUNT, alice);
-
-        // Buffer floor = 5% of totalAssets = 5e18
-        // Deploying 96 leaves only 4 (below floor)
-        vm.prank(operator);
-        vm.expectRevert("csDIEM: would breach buffer floor");
-        vault.deployToVenice(96e18);
-    }
-
-    function test_deployToVenice_maxDeployRespectsFloor() public {
-        vm.prank(alice);
-        vault.deposit(DEPOSIT_AMOUNT, alice);
-
-        // Max deploy = 100 - 5% = 95
-        vm.prank(operator);
-        vault.deployToVenice(95e18);
-
-        assertEq(vault.liquidBuffer(), 5e18);
-        assertEq(vault.forwardStaked(), 95e18);
-        assertEq(vault.totalAssets(), DEPOSIT_AMOUNT);
-    }
-
-    function test_deployToVenice_totalAssetsUnchanged() public {
+    function test_totalAssets_excludesPendingRedemptions() public {
         vm.prank(alice);
         vault.deposit(DEPOSIT_AMOUNT, alice);
 
         uint256 totalBefore = vault.totalAssets();
-        uint256 sharesBefore = vault.balanceOf(alice);
-        uint256 assetValueBefore = vault.convertToAssets(sharesBefore);
 
-        vm.prank(operator);
-        vault.deployToVenice(90e18);
-
-        // totalAssets unchanged — share price preserved
-        assertEq(vault.totalAssets(), totalBefore);
-        assertEq(vault.convertToAssets(sharesBefore), assetValueBefore);
-    }
-
-    function test_initiateBufferReplenish_success() public {
-        vm.prank(alice);
-        vault.deposit(DEPOSIT_AMOUNT, alice);
-
-        vm.prank(operator);
-        vault.deployToVenice(90e18);
-
-        vm.expectEmit(false, false, false, true);
-        emit IcsDIEM.BufferReplenishInitiated(50e18);
-
-        vm.prank(operator);
-        vault.initiateBufferReplenish(50e18);
-
-        assertEq(vault.forwardStaked(), 40e18);
-        assertEq(vault.pendingUnstake(), 50e18);
-        // totalAssets still 100 (10 buffer + 40 staked + 50 pending)
-        assertEq(vault.totalAssets(), DEPOSIT_AMOUNT);
-    }
-
-    function test_initiateBufferReplenish_revertsZero() public {
-        vm.prank(operator);
-        vm.expectRevert("csDIEM: zero amount");
-        vault.initiateBufferReplenish(0);
-    }
-
-    function test_initiateBufferReplenish_revertsNotOperator() public {
-        vm.prank(alice);
-        vm.expectRevert("csDIEM: not operator");
-        vault.initiateBufferReplenish(10e18);
-    }
-
-    function test_completeBufferReplenish_success() public {
-        vm.prank(alice);
-        vault.deposit(DEPOSIT_AMOUNT, alice);
-
-        vm.prank(operator);
-        vault.deployToVenice(90e18);
-
-        vm.prank(operator);
-        vault.initiateBufferReplenish(50e18);
-
-        // Warp past cooldown
-        vm.warp(block.timestamp + 24 hours);
-
-        vm.prank(operator);
-        vault.completeBufferReplenish();
-
-        assertEq(vault.liquidBuffer(), 60e18);
-        assertEq(vault.forwardStaked(), 40e18);
-        assertEq(vault.pendingUnstake(), 0);
-        assertEq(vault.totalAssets(), DEPOSIT_AMOUNT);
-    }
-
-    function test_completeBufferReplenish_revertsDuringCooldown() public {
-        vm.prank(alice);
-        vault.deposit(DEPOSIT_AMOUNT, alice);
-
-        vm.prank(operator);
-        vault.deployToVenice(90e18);
-
-        vm.prank(operator);
-        vault.initiateBufferReplenish(50e18);
-
-        // Don't warp — cooldown active
-        vm.prank(operator);
-        vm.expectRevert("MockDIEM: cooldown active");
-        vault.completeBufferReplenish();
-    }
-
-    function test_completeBufferReplenish_revertsNotOperator() public {
-        vm.prank(alice);
-        vm.expectRevert("csDIEM: not operator");
-        vault.completeBufferReplenish();
-    }
-
-    function test_withdraw_revertsBufferInsufficient() public {
-        vm.prank(alice);
-        vault.deposit(DEPOSIT_AMOUNT, alice);
-
-        // Deploy 90 to Venice
-        vm.prank(operator);
-        vault.deployToVenice(90e18);
-
-        // Alice tries to withdraw more than buffer
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
-        vm.expectRevert("csDIEM: buffer insufficient");
-        vault.redeem(shares, alice, alice); // tries to redeem all ~100 DIEM but only 10 in buffer
+        uint256 assets = vault.requestRedeem(shares);
+
+        // totalAssets should decrease by the pending redemption amount
+        assertApproxEqAbs(vault.totalAssets(), totalBefore - assets, 1);
     }
 
-    function test_withdraw_succeedsWithinBuffer() public {
-        vm.prank(alice);
-        vault.deposit(DEPOSIT_AMOUNT, alice);
+    // ── Full Async Redemption Flow ──────────────────────────────────────
 
-        vm.prank(operator);
-        vault.deployToVenice(90e18);
-
-        // Alice can withdraw assets up to buffer (10 DIEM)
-        vm.prank(alice);
-        vault.withdraw(10e18, alice, alice);
-
-        // Check she received the DIEM
-        assertEq(diem.balanceOf(alice), INITIAL_BALANCE - DEPOSIT_AMOUNT + 10e18);
-    }
-
-    function test_views_liquidBuffer_forwardStaked_pendingUnstake() public {
-        // Initial: all zero
-        assertEq(vault.liquidBuffer(), 0);
-        assertEq(vault.forwardStaked(), 0);
-        assertEq(vault.pendingUnstake(), 0);
-
-        // After deposit
-        vm.prank(alice);
-        vault.deposit(DEPOSIT_AMOUNT, alice);
-        assertEq(vault.liquidBuffer(), DEPOSIT_AMOUNT);
-
-        // After deploying
-        vm.prank(operator);
-        vault.deployToVenice(80e18);
-        assertEq(vault.liquidBuffer(), 20e18);
-        assertEq(vault.forwardStaked(), 80e18);
-
-        // After initiating replenish
-        vm.prank(operator);
-        vault.initiateBufferReplenish(30e18);
-        assertEq(vault.forwardStaked(), 50e18);
-        assertEq(vault.pendingUnstake(), 30e18);
-
-        // After completing replenish
-        vm.warp(block.timestamp + 24 hours);
-        vm.prank(operator);
-        vault.completeBufferReplenish();
-        assertEq(vault.liquidBuffer(), 50e18);
-        assertEq(vault.forwardStaked(), 50e18);
-        assertEq(vault.pendingUnstake(), 0);
-    }
-
-    function test_fullVeniceFlow_sharePricePreserved() public {
+    function test_fullAsyncRedemptionFlow() public {
         // 1. Alice deposits
         vm.prank(alice);
         vault.deposit(DEPOSIT_AMOUNT, alice);
-        uint256 sharesAlice = vault.balanceOf(alice);
 
-        // 2. Operator donates (share price up)
-        vm.prank(operator);
+        // 2. Donor donates (share price up)
+        vm.prank(donor);
         vault.donate(DONATION_AMOUNT);
 
-        uint256 priceAfterDonation = vault.convertToAssets(1e24);
-
-        // 3. Deploy to Venice
-        vm.prank(operator);
-        vault.deployToVenice(95e18); // deploy most of 110 DIEM
-
-        // Share price unchanged by deploy
-        assertEq(vault.convertToAssets(1e24), priceAfterDonation);
-
-        // 4. Initiate and complete replenish
-        vm.prank(operator);
-        vault.initiateBufferReplenish(95e18);
-        vm.warp(block.timestamp + 24 hours);
-        vm.prank(operator);
-        vault.completeBufferReplenish();
-
-        // Share price still preserved
-        assertEq(vault.convertToAssets(1e24), priceAfterDonation);
-
-        // 5. Alice redeems all
+        // 3. Alice requests full redeem
+        uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
-        uint256 assets = vault.redeem(sharesAlice, alice, alice);
+        uint256 assets = vault.requestRedeem(shares);
 
-        // Alice gets deposit + donation (minus rounding)
+        // Assets should be ~110 DIEM (deposit + donation)
         assertApproxEqAbs(assets, DEPOSIT_AMOUNT + DONATION_AMOUNT, 1);
+
+        // 4. Wait for delay
+        vm.warp(block.timestamp + 24 hours);
+
+        // 5. Anyone claims from Venice
+        vault.claimFromVenice();
+
+        // 6. Alice completes redemption
+        uint256 diemBefore = diem.balanceOf(alice);
+        vm.prank(alice);
+        vault.completeRedeem();
+
+        assertApproxEqAbs(diem.balanceOf(alice) - diemBefore, DEPOSIT_AMOUNT + DONATION_AMOUNT, 1);
+        assertEq(vault.totalPendingRedemptions(), 0);
+    }
+
+    function test_multiUserAsyncRedemption() public {
+        // Alice and Bob deposit
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+        vm.prank(bob);
+        vault.deposit(DEPOSIT_AMOUNT, bob);
+
+        // Both request full redeem
+        uint256 aliceShares = vault.balanceOf(alice);
+        vm.prank(alice);
+        uint256 aliceAssets = vault.requestRedeem(aliceShares);
+
+        uint256 bobShares = vault.balanceOf(bob);
+        vm.prank(bob);
+        uint256 bobAssets = vault.requestRedeem(bobShares);
+
+        assertEq(vault.totalPendingRedemptions(), aliceAssets + bobAssets);
+
+        // Wait and claim
+        vm.warp(block.timestamp + 24 hours);
+        vault.claimFromVenice();
+
+        // Both complete
+        vm.prank(alice);
+        vault.completeRedeem();
+        vm.prank(bob);
+        vault.completeRedeem();
+
+        assertEq(vault.totalPendingRedemptions(), 0);
+        assertApproxEqAbs(diem.balanceOf(alice), INITIAL_BALANCE, 1);
+        assertApproxEqAbs(diem.balanceOf(bob), INITIAL_BALANCE, 1);
     }
 
     // ── Fuzz tests ─────────────────────────────────────────────────────
 
-    function testFuzz_depositWithdrawRoundTrip(uint256 amount) public {
+    function testFuzz_depositRedeemRoundTrip(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_BALANCE);
 
         vm.prank(alice);
         uint256 shares = vault.deposit(amount, alice);
 
         vm.prank(alice);
-        uint256 assetsBack = vault.redeem(shares, alice, alice);
+        uint256 assetsBack = vault.requestRedeem(shares);
 
         // OZ ERC-4626 rounds in favor of the vault — user may lose 1 wei
         assertApproxEqAbs(assetsBack, amount, 1);
         assertLe(assetsBack, amount); // Never more than deposited
+
+        // Complete the withdrawal
+        vm.warp(block.timestamp + 24 hours);
+        vault.claimFromVenice();
+        vm.prank(alice);
+        vault.completeRedeem();
+
+        assertApproxEqAbs(diem.balanceOf(alice), INITIAL_BALANCE, 1);
     }
 
     function testFuzz_donationIncreasesSharePrice(
@@ -698,8 +891,9 @@ contract csDIEMTest is Test {
         uint256 sharesBefore = vault.balanceOf(alice);
         uint256 priceBefore = vault.convertToAssets(1e24);
 
-        // Operator donates
-        vm.prank(operator);
+        // Anyone donates
+        diem.mint(donor, donationAmount);
+        vm.prank(donor);
         vault.donate(donationAmount);
 
         uint256 priceAfter = vault.convertToAssets(1e24);
@@ -730,7 +924,8 @@ contract csDIEMTest is Test {
         vm.prank(bob);
         vault.deposit(bobDeposit, bob);
 
-        vm.prank(operator);
+        diem.mint(donor, donationAmount);
+        vm.prank(donor);
         vault.donate(donationAmount);
 
         uint256 aliceAssets = vault.convertToAssets(vault.balanceOf(alice));
@@ -747,35 +942,5 @@ contract csDIEMTest is Test {
         uint256 tolerance = totalValue / 1e15 + 10;
         assertApproxEqAbs(aliceAssets, aliceExpected, tolerance);
         assertApproxEqAbs(bobAssets, bobExpected, tolerance);
-    }
-
-    function testFuzz_deployToVenice_preservesTotalAssets(
-        uint256 depositAmount,
-        uint256 deployAmount
-    ) public {
-        depositAmount = bound(depositAmount, 10e18, INITIAL_BALANCE);
-
-        vm.prank(alice);
-        vault.deposit(depositAmount, alice);
-
-        // Max deployable respecting 5% floor of totalAssets
-        uint256 totalAssetsVal = vault.totalAssets();
-        uint256 floor = (totalAssetsVal * 500) / 10000;
-        uint256 maxDeploy = depositAmount - floor;
-        deployAmount = bound(deployAmount, 1, maxDeploy);
-
-        uint256 totalBefore = vault.totalAssets();
-
-        vm.prank(operator);
-        vault.deployToVenice(deployAmount);
-
-        // totalAssets unchanged
-        assertEq(vault.totalAssets(), totalBefore);
-
-        // Conservation: liquidBuffer + forwardStaked == totalAssets
-        assertEq(
-            vault.liquidBuffer() + vault.forwardStaked(),
-            vault.totalAssets()
-        );
     }
 }

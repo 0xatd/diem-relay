@@ -2,7 +2,6 @@
 pragma solidity 0.8.24;
 
 import "forge-std/Test.sol";
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {csDIEM} from "../src/csDIEM.sol";
 import {MockDIEMStaking} from "./mocks/MockDIEMStaking.sol";
@@ -14,18 +13,16 @@ contract csDIEMHandler is Test {
     MockDIEMStaking public diem;
 
     address[] public actors;
-    address public operator;
 
     // Ghost variables for tracking
     uint256 public ghost_totalDeposited;
-    uint256 public ghost_totalWithdrawn;
+    uint256 public ghost_totalRedeemed;
     uint256 public ghost_totalDonated;
-    uint256 public ghost_lastSharePrice;
+    uint256 public ghost_totalPendingRedemptions;
 
-    constructor(csDIEM _vault, MockDIEMStaking _diem, address _operator) {
+    constructor(csDIEM _vault, MockDIEMStaking _diem) {
         vault = _vault;
         diem = _diem;
-        operator = _operator;
 
         // Instant cooldown for invariant testing
         diem.setCooldownDuration(0);
@@ -38,15 +35,6 @@ contract csDIEMHandler is Test {
             vm.prank(actor);
             diem.approve(address(vault), type(uint256).max);
         }
-
-        // Initial share price (1:1 scaled by offset)
-        ghost_lastSharePrice = vault.convertToAssets(1e24);
-    }
-
-    // ── Helpers ────────────────────────────────────────────────────────────
-
-    function _min(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a < b ? a : b;
     }
 
     // ── Actions ────────────────────────────────────────────────────────────
@@ -64,31 +52,55 @@ contract csDIEMHandler is Test {
         ghost_totalDeposited += amount;
     }
 
-    function withdraw(uint256 actorSeed, uint256 shares) external {
+    function requestRedeem(uint256 actorSeed, uint256 shares) external {
         address actor = actors[actorSeed % actors.length];
         uint256 maxShares = vault.balanceOf(actor);
         if (maxShares == 0) return;
 
         shares = bound(shares, 1, maxShares);
 
-        // Check if assets to withdraw would exceed buffer
-        uint256 assets = vault.previewRedeem(shares);
-        if (assets > vault.liquidBuffer()) return; // Skip, buffer insufficient
-
-        uint256 assetsBefore = diem.balanceOf(actor);
         vm.prank(actor);
-        vault.redeem(shares, actor, actor);
-        uint256 assetsAfter = diem.balanceOf(actor);
+        uint256 assets = vault.requestRedeem(shares);
 
-        ghost_totalWithdrawn += (assetsAfter - assetsBefore);
+        ghost_totalPendingRedemptions += assets;
+    }
+
+    function completeRedeem(uint256 actorSeed) external {
+        address actor = actors[actorSeed % actors.length];
+        (uint256 pendingAssets, uint256 requestedAt) = vault.redemptionRequests(actor);
+        if (pendingAssets == 0) return;
+
+        // Ensure delay has passed
+        if (block.timestamp < requestedAt + vault.WITHDRAWAL_DELAY()) {
+            vm.warp(requestedAt + vault.WITHDRAWAL_DELAY());
+        }
+
+        // Claim from Venice if needed (cooldown is 0 in tests)
+        (,, uint256 venicePending) = diem.stakedInfos(address(vault));
+        if (venicePending > 0) {
+            vault.claimFromVenice();
+        }
+
+        // Only complete if enough liquid
+        uint256 liquid = diem.balanceOf(address(vault));
+        if (liquid < pendingAssets) return;
+
+        vm.prank(actor);
+        vault.completeRedeem();
+
+        ghost_totalPendingRedemptions -= pendingAssets;
+        ghost_totalRedeemed += pendingAssets;
     }
 
     function donate(uint256 amount) external {
         amount = bound(amount, 1e15, 100e18);
         if (vault.totalSupply() == 0) return; // No point donating to empty vault
 
-        diem.mint(operator, amount);
-        vm.prank(operator);
+        address donor = address(uint160(0xD000));
+        diem.mint(donor, amount);
+        vm.prank(donor);
+        diem.approve(address(vault), amount);
+        vm.prank(donor);
         vault.donate(amount);
 
         ghost_totalDonated += amount;
@@ -99,40 +111,19 @@ contract csDIEMHandler is Test {
         vm.warp(block.timestamp + secs);
     }
 
-    // ── Venice actions ────────────────────────────────────────────────────
-
-    function deployToVenice(uint256 amount) external {
-        uint256 buffer = vault.liquidBuffer();
-        if (buffer == 0) return;
-
-        uint256 totalAssetsVal = vault.totalAssets();
-        if (totalAssetsVal == 0) return;
-
-        uint256 floor = (totalAssetsVal * 500) / 10000; // 5% floor
-        if (buffer <= floor) return;
-
-        amount = bound(amount, 1, buffer - floor);
-
-        vm.prank(operator);
-        vault.deployToVenice(amount);
-    }
-
-    function initiateBufferReplenish(uint256 amount) external {
-        uint256 staked = vault.forwardStaked();
-        if (staked == 0) return;
-
-        amount = bound(amount, 1, staked);
-
-        vm.prank(operator);
-        vault.initiateBufferReplenish(amount);
-    }
-
-    function completeBufferReplenish() external {
-        uint256 pending = vault.pendingUnstake();
+    function claimFromVenice() external {
+        (,, uint256 pending) = diem.stakedInfos(address(vault));
         if (pending == 0) return;
 
-        vm.prank(operator);
-        vault.completeBufferReplenish();
+        vault.claimFromVenice();
+    }
+
+    function redeployExcess() external {
+        uint256 liquid = diem.balanceOf(address(vault));
+        uint256 pendingR = vault.totalPendingRedemptions();
+        if (liquid <= pendingR) return;
+
+        vault.redeployExcess();
     }
 }
 
@@ -150,42 +141,50 @@ contract csDIEMInvariantTest is Test {
         diem = new MockDIEMStaking();
         vault = new csDIEM(IERC20(address(diem)), admin, operator);
 
-        handler = new csDIEMHandler(vault, diem, operator);
-
-        // Grant operator approval for handler donations
-        vm.prank(operator);
-        diem.approve(address(vault), type(uint256).max);
+        handler = new csDIEMHandler(vault, diem);
 
         targetContract(address(handler));
 
         // Target specific functions
         bytes4[] memory selectors = new bytes4[](7);
         selectors[0] = csDIEMHandler.deposit.selector;
-        selectors[1] = csDIEMHandler.withdraw.selector;
-        selectors[2] = csDIEMHandler.donate.selector;
-        selectors[3] = csDIEMHandler.warpTime.selector;
-        selectors[4] = csDIEMHandler.deployToVenice.selector;
-        selectors[5] = csDIEMHandler.initiateBufferReplenish.selector;
-        selectors[6] = csDIEMHandler.completeBufferReplenish.selector;
+        selectors[1] = csDIEMHandler.requestRedeem.selector;
+        selectors[2] = csDIEMHandler.completeRedeem.selector;
+        selectors[3] = csDIEMHandler.donate.selector;
+        selectors[4] = csDIEMHandler.warpTime.selector;
+        selectors[5] = csDIEMHandler.claimFromVenice.selector;
+        selectors[6] = csDIEMHandler.redeployExcess.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
 
-    /// @notice totalAssets must always equal liquidBuffer + forwardStaked + pendingUnstake
-    function invariant_totalAssetsAccountsForAllDiem() public view {
+    /// @notice Total deposited + donated = total redeemed + totalAssets + totalPendingRedemptions
+    /// All DIEM is accounted for.
+    function invariant_diemConservation() public view {
+        uint256 totalIn = handler.ghost_totalDeposited() + handler.ghost_totalDonated();
+        uint256 totalOut = handler.ghost_totalRedeemed();
+        uint256 inVault = vault.totalAssets() + vault.totalPendingRedemptions();
+
         assertEq(
-            vault.totalAssets(),
-            vault.liquidBuffer() + vault.forwardStaked() + vault.pendingUnstake(),
-            "totalAssets != buffer + staked + pending"
+            totalIn,
+            totalOut + inVault,
+            "deposited + donated != redeemed + totalAssets + pendingRedemptions"
         );
     }
 
-    /// @notice Total deposited + donated must equal total withdrawn + vault totalAssets
-    function invariant_diemConservation() public view {
-        uint256 totalAssetsVal = vault.totalAssets();
+    /// @notice totalAssets accounts for all DIEM locations minus pending redemptions.
+    /// totalAssets = liquid + veniceStaked + venicePending - totalPendingRedemptions
+    function invariant_totalAssetsAccountsForAllDiem() public view {
+        (uint256 veniceStaked,, uint256 venicePending) = diem.stakedInfos(address(vault));
+        uint256 liquid = diem.balanceOf(address(vault));
+        uint256 gross = liquid + veniceStaked + venicePending;
+        uint256 expected = gross > vault.totalPendingRedemptions()
+            ? gross - vault.totalPendingRedemptions()
+            : 0;
+
         assertEq(
-            handler.ghost_totalDeposited() + handler.ghost_totalDonated(),
-            handler.ghost_totalWithdrawn() + totalAssetsVal,
-            "deposited + donated != withdrawn + totalAssets"
+            vault.totalAssets(),
+            expected,
+            "totalAssets != liquid + staked + pending - pendingRedemptions"
         );
     }
 
@@ -218,5 +217,14 @@ contract csDIEMInvariantTest is Test {
         uint256 tolerance = testAssets / 100_000 + 1;
         assertApproxEqAbs(assetsBack, testAssets, tolerance);
         assertLe(assetsBack, testAssets); // Vault never overpays
+    }
+
+    /// @notice Ghost pending redemptions tracks contract state
+    function invariant_pendingRedemptionsMatchGhost() public view {
+        assertEq(
+            vault.totalPendingRedemptions(),
+            handler.ghost_totalPendingRedemptions(),
+            "totalPendingRedemptions != ghost"
+        );
     }
 }

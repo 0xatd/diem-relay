@@ -13,17 +13,22 @@ import {IDIEMStaking} from "./interfaces/IDIEMStaking.sol";
  * @title csDIEM — Compounding Staked DIEM
  * @notice ERC-4626 vault: deposit DIEM → receive csDIEM shares.
  *
- * An off-chain operator sells Venice AI compute credits, swaps USDC → DIEM,
- * and calls `donate()` to add DIEM rewards to the vault. This increases
- * `totalAssets()`, pushing the share price up.
+ * Anyone can call `donate()` to add DIEM rewards to the vault. This
+ * increases `totalAssets()`, pushing the share price up.
  *
- * Venice forward-staking: deposited DIEM is forward-staked on the DIEM
- * token contract to earn Venice compute credits ($1/day per staked DIEM).
- * A liquid buffer (target 10%) is maintained for instant withdrawals.
+ * Venice forward-staking: all deposited DIEM is immediately
+ * forward-staked on Venice for compute credits ($1/day per staked DIEM).
  *
- * `totalAssets()` is overridden to include forward-staked + pending DIEM,
- * ensuring the share price correctly reflects all assets under management
- * regardless of how much is deployed to Venice.
+ * Redemptions use a request/complete pattern with a 24h delay,
+ * matching Venice's unstake cooldown. Standard ERC-4626 withdraw()
+ * and redeem() are disabled — use requestRedeem()/completeRedeem().
+ *
+ * Venice management (claimFromVenice, redeployExcess) is fully
+ * permissionless — anyone can call when conditions are met.
+ *
+ * `totalAssets()` is overridden to include forward-staked + pending
+ * DIEM minus pending redemptions, ensuring the share price correctly
+ * reflects all assets under management.
  *
  * Because csDIEM is a standard ERC-20 with a monotonically increasing
  * exchange rate, it composes with Pendle (PT/YT), Morpho, Silo, and
@@ -32,23 +37,17 @@ import {IDIEMStaking} from "./interfaces/IDIEMStaking.sol";
  * Security features:
  *   - OZ ERC-4626 with virtual shares/assets (inflation attack mitigation)
  *   - Two-step admin transfer
- *   - Emergency pause (deposits gated; withdrawals always allowed)
+ *   - Emergency pause (deposits gated; redemption requests always allowed)
  *   - Operator role separation
  *   - Token recovery for accidental sends
- *   - Buffer floor enforcement on Venice deployment
+ *   - 24h async withdrawal matching Venice cooldown
  */
 contract csDIEM is ERC4626, IcsDIEM {
     using SafeERC20 for IERC20;
 
     // ── Constants ────────────────────────────────────────────────────────
 
-    /// @notice Buffer target: 10% of total deposits kept liquid.
-    uint256 public constant BUFFER_TARGET_BPS = 1000;
-
-    /// @notice Buffer floor: below 5%, operator should replenish.
-    uint256 public constant BUFFER_FLOOR_BPS = 500;
-
-    uint256 private constant BPS = 10000;
+    uint256 public constant override WITHDRAWAL_DELAY = 24 hours;
 
     // ── Immutables ──────────────────────────────────────────────────────
 
@@ -62,15 +61,15 @@ contract csDIEM is ERC4626, IcsDIEM {
     address public override operator;
     bool public override paused;
 
+    // ── State — redemptions ─────────────────────────────────────────────
+
+    uint256 public override totalPendingRedemptions;
+    mapping(address => RedemptionRequest) private _redemptionRequests;
+
     // ── Modifiers ───────────────────────────────────────────────────────
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "csDIEM: not admin");
-        _;
-    }
-
-    modifier onlyOperator() {
-        require(msg.sender == operator, "csDIEM: not operator");
         _;
     }
 
@@ -102,17 +101,20 @@ contract csDIEM is ERC4626, IcsDIEM {
 
     /**
      * @notice Total DIEM assets under management.
-     * @dev Includes liquid buffer + forward-staked + pending unstake.
-     *      This ensures share price stays accurate when DIEM is deployed
-     *      to Venice staking. Without this override, deploying DIEM to
-     *      Venice would collapse the share price.
+     * @dev liquid + veniceStaked + venicePending - totalPendingRedemptions
+     *
+     *      Subtracting pending redemptions is critical: those shares have
+     *      already been burned, so their DIEM is owed to redeemers and must
+     *      not inflate the share price for remaining holders.
      */
     function totalAssets() public view override(ERC4626, IERC4626) returns (uint256) {
         (uint256 staked,, uint256 pending) = diemStaking.stakedInfos(address(this));
-        return IERC20(asset()).balanceOf(address(this)) + staked + pending;
+        uint256 gross = IERC20(asset()).balanceOf(address(this)) + staked + pending;
+        // Pending redemptions are owed to users, not part of vault value
+        return gross > totalPendingRedemptions ? gross - totalPendingRedemptions : 0;
     }
 
-    /// @dev Gate deposits behind pause. Withdrawals always allowed.
+    /// @dev Gate deposits behind pause. Forward DIEM to Venice after deposit.
     function _deposit(
         address caller,
         address receiver,
@@ -120,26 +122,32 @@ contract csDIEM is ERC4626, IcsDIEM {
         uint256 shares
     ) internal override whenNotPaused {
         super._deposit(caller, receiver, assets, shares);
+
+        // Forward deposited DIEM to Venice immediately
+        diemStaking.stake(assets);
     }
 
     /**
-     * @dev Gate withdrawals to liquid buffer.
-     *      If a user tries to withdraw more than the buffer holds,
-     *      the tx reverts. The operator must replenish the buffer
-     *      from Venice staking first.
+     * @dev Disable standard ERC-4626 withdrawals.
+     *      Users must use requestRedeem()/completeRedeem() instead.
      */
     function _withdraw(
-        address caller,
-        address receiver,
-        address owner,
-        uint256 assets,
-        uint256 shares
-    ) internal override {
-        require(
-            IERC20(asset()).balanceOf(address(this)) >= assets,
-            "csDIEM: buffer insufficient"
-        );
-        super._withdraw(caller, receiver, owner, assets, shares);
+        address,
+        address,
+        address,
+        uint256,
+        uint256
+    ) internal pure override {
+        revert("csDIEM: use requestRedeem");
+    }
+
+    /// @dev Return 0 for maxWithdraw/maxRedeem since standard paths are disabled.
+    function maxWithdraw(address) public pure override(ERC4626, IERC4626) returns (uint256) {
+        return 0;
+    }
+
+    function maxRedeem(address) public pure override(ERC4626, IERC4626) returns (uint256) {
+        return 0;
     }
 
     /// @dev Use 1e6 offset for inflation attack protection.
@@ -150,99 +158,140 @@ contract csDIEM is ERC4626, IcsDIEM {
         return 6;
     }
 
-    // ── Views — buffer ────────────────────────────────────────────────
+    // ── Views ───────────────────────────────────────────────────────────
 
     /// @inheritdoc IcsDIEM
-    function liquidBuffer() public view override returns (uint256) {
-        return IERC20(asset()).balanceOf(address(this));
+    function redemptionRequests(address account)
+        external
+        view
+        override
+        returns (uint256 assets, uint256 requestedAt)
+    {
+        RedemptionRequest storage req = _redemptionRequests[account];
+        return (req.assets, req.requestedAt);
     }
 
     /// @inheritdoc IcsDIEM
-    function forwardStaked() public view override returns (uint256) {
-        (uint256 staked,,) = diemStaking.stakedInfos(address(this));
-        return staked;
+    function veniceCooldownEnd() external view override returns (uint256) {
+        (, uint256 cooldownEnd,) = diemStaking.stakedInfos(address(this));
+        return cooldownEnd;
     }
 
-    /// @inheritdoc IcsDIEM
-    function pendingUnstake() public view override returns (uint256) {
-        (,, uint256 pending) = diemStaking.stakedInfos(address(this));
-        return pending;
+    // ── Async Redemption ────────────────────────────────────────────────
+
+    /**
+     * @notice Request redemption of csDIEM shares. Burns shares, starts 24h delay.
+     * @dev Burns shares at current exchange rate, records DIEM amount owed.
+     *      Initiates Venice unstake for the DIEM amount.
+     *      If user has an existing pending redemption, amounts accumulate
+     *      and the timer resets.
+     * @param shares Number of csDIEM shares to redeem.
+     * @return assets DIEM amount that will be claimable after delay.
+     */
+    function requestRedeem(uint256 shares) external override returns (uint256 assets) {
+        require(shares > 0, "csDIEM: zero shares");
+        require(balanceOf(msg.sender) >= shares, "csDIEM: insufficient shares");
+
+        // Calculate DIEM owed at current exchange rate BEFORE burning
+        assets = previewRedeem(shares);
+        require(assets > 0, "csDIEM: zero assets");
+
+        // Effects — burn shares
+        _burn(msg.sender, shares);
+
+        // Track pending redemption
+        RedemptionRequest storage req = _redemptionRequests[msg.sender];
+        req.assets += assets;
+        req.requestedAt = block.timestamp;
+        totalPendingRedemptions += assets;
+
+        // Interaction — initiate Venice unstake (starts/resets cooldown)
+        diemStaking.initiateUnstake(assets);
+
+        emit RedemptionRequested(msg.sender, shares, assets);
     }
 
-    // ── Operator — donate rewards ──────────────────────────────────────
+    /**
+     * @notice Complete redemption after 24h delay.
+     * @dev Requires:
+     *      1. User's personal 24h delay has elapsed
+     *      2. Contract has enough liquid DIEM (call claimFromVenice first if needed)
+     */
+    function completeRedeem() external override {
+        RedemptionRequest storage req = _redemptionRequests[msg.sender];
+        uint256 assets = req.assets;
+        require(assets > 0, "csDIEM: no pending redemption");
+        require(
+            block.timestamp >= req.requestedAt + WITHDRAWAL_DELAY,
+            "csDIEM: withdrawal delay not met"
+        );
+
+        uint256 liquid = IERC20(asset()).balanceOf(address(this));
+        require(liquid >= assets, "csDIEM: claim from Venice first");
+
+        // Effects
+        req.assets = 0;
+        req.requestedAt = 0;
+        totalPendingRedemptions -= assets;
+
+        // Interaction
+        IERC20(asset()).safeTransfer(msg.sender, assets);
+
+        emit RedemptionCompleted(msg.sender, assets);
+    }
+
+    // ── Permissionless ──────────────────────────────────────────────────
 
     /**
      * @notice Donate DIEM rewards to the vault, increasing share price.
-     * @dev Operator must have approved this contract for `amount` DIEM.
+     * @dev Anyone can call. Donor must have approved this contract.
      *      The donated DIEM increases `totalAssets()` without minting
      *      new shares, so existing share prices go up.
+     *      Inflation attack mitigated by _decimalsOffset=6.
      * @param amount Amount of DIEM to donate.
      */
-    function donate(uint256 amount) external override onlyOperator {
+    function donate(uint256 amount) external override {
         require(amount > 0, "csDIEM: zero amount");
 
-        // Pull DIEM from operator — increases totalAssets() for all holders
+        // Pull DIEM from donor — increases totalAssets() for all holders
         IERC20(asset()).safeTransferFrom(msg.sender, address(this), amount);
+
+        // Forward donated DIEM to Venice
+        diemStaking.stake(amount);
 
         emit RewardDonated(msg.sender, amount);
     }
 
-    // ── Operator — Venice forward-staking ──────────────────────────────
-
     /**
-     * @notice Deploy idle DIEM from liquid buffer to Venice staking.
-     * @dev Calls DIEM.stake() which does an internal balance transfer.
-     *      Enforces buffer floor to ensure withdrawal liquidity.
-     *      totalAssets() remains unchanged because forwardStaked increases
-     *      by the same amount liquidBuffer decreases.
-     * @param amount Amount of DIEM to forward-stake.
+     * @notice Claim matured DIEM from Venice. Anyone can call.
+     * @dev Calls diemStaking.unstake() which transfers all pending
+     *      DIEM back after cooldown. Reverts if cooldown hasn't expired.
      */
-    function deployToVenice(uint256 amount) external override onlyOperator {
-        require(amount > 0, "csDIEM: zero amount");
+    function claimFromVenice() external override {
+        (,, uint256 pending) = diemStaking.stakedInfos(address(this));
+        require(pending > 0, "csDIEM: nothing pending on Venice");
 
-        uint256 currentBuffer = IERC20(asset()).balanceOf(address(this));
-        require(currentBuffer >= amount, "csDIEM: insufficient buffer");
-
-        // Enforce buffer floor relative to total assets
-        uint256 totalAssetsValue = totalAssets();
-        if (totalAssetsValue > 0) {
-            uint256 bufferAfter = currentBuffer - amount;
-            require(
-                bufferAfter >= (totalAssetsValue * BUFFER_FLOOR_BPS) / BPS,
-                "csDIEM: would breach buffer floor"
-            );
-        }
-
-        // Interaction — stake on DIEM contract
-        diemStaking.stake(amount);
-
-        emit DeployedToVenice(amount);
-    }
-
-    /**
-     * @notice Start unstaking DIEM from Venice to replenish buffer.
-     * @dev Initiates the 24h cooldown on the DIEM contract.
-     *      Warning: calling again while pending resets the cooldown timer.
-     * @param amount Amount of DIEM to unstake from Venice.
-     */
-    function initiateBufferReplenish(uint256 amount) external override onlyOperator {
-        require(amount > 0, "csDIEM: zero amount");
-
-        // Interaction — initiate unstake on DIEM contract
-        diemStaking.initiateUnstake(amount);
-
-        emit BufferReplenishInitiated(amount);
-    }
-
-    /**
-     * @notice Complete buffer replenishment after Venice cooldown expires.
-     * @dev Calls DIEM.unstake() which transfers pendingUnstakeAmount back.
-     */
-    function completeBufferReplenish() external override onlyOperator {
-        // Interaction — complete unstake on DIEM contract
+        // Interaction
         diemStaking.unstake();
 
-        emit BufferReplenishCompleted(IERC20(asset()).balanceOf(address(this)));
+        emit VeniceClaimed(msg.sender, pending);
+    }
+
+    /**
+     * @notice Redeploy excess liquid DIEM to Venice. Anyone can call.
+     * @dev Any liquid DIEM beyond what's needed for pending redemptions
+     *      is excess and should be earning Venice compute credits.
+     */
+    function redeployExcess() external override {
+        uint256 liquid = IERC20(asset()).balanceOf(address(this));
+        require(liquid > totalPendingRedemptions, "csDIEM: no excess to redeploy");
+
+        uint256 excess = liquid - totalPendingRedemptions;
+
+        // Interaction — forward excess to Venice
+        diemStaking.stake(excess);
+
+        emit ExcessRedeployed(msg.sender, excess);
     }
 
     // ── Admin ──────────────────────────────────────────────────────────

@@ -5,21 +5,38 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /**
  * @title IcsDIEM
- * @notice Interface for the Compounding Staked DIEM vault.
+ * @notice Interface for Compounding Staked DIEM vault.
  *
  * ERC-4626 vault: deposit DIEM → receive csDIEM shares.
- * Operator donates DIEM rewards → share price increases.
+ * Anyone donates DIEM rewards → share price increases.
  * Composable with Pendle, Morpho, Silo, etc.
  *
- * Venice forward-staking: operator deploys deposited DIEM to Venice
- * staking for compute credits. A liquid buffer is maintained for
- * instant withdrawals.
+ * All deposited DIEM is forward-staked on Venice for compute credits.
+ * Redemptions require a 24h delay (matching Venice's unstake cooldown).
+ * Standard ERC-4626 withdraw()/redeem() are disabled — use
+ * requestRedeem()/completeRedeem() instead.
+ *
+ * Venice management (claimFromVenice, redeployExcess) is fully
+ * permissionless — anyone can call when conditions are met.
  */
 interface IcsDIEM is IERC4626 {
-    // ── Events ────────────────────────────────────────────────────────────
+    // ── Structs ─────────────────────────────────────────────────────────────
 
-    /// @notice Emitted when operator donates DIEM rewards to the vault.
-    event RewardDonated(address indexed operator, uint256 amount);
+    struct RedemptionRequest {
+        uint256 assets; // DIEM amount owed
+        uint256 requestedAt;
+    }
+
+    // ── Events ──────────────────────────────────────────────────────────────
+
+    /// @notice Emitted when anyone donates DIEM rewards to the vault.
+    event RewardDonated(address indexed donor, uint256 amount);
+
+    /// @notice Emitted when a user requests share redemption.
+    event RedemptionRequested(address indexed user, uint256 shares, uint256 assets);
+
+    /// @notice Emitted when a user completes redemption after delay.
+    event RedemptionCompleted(address indexed user, uint256 assets);
 
     /// @notice Emitted when admin pauses the vault.
     event Paused(address indexed by);
@@ -39,59 +56,58 @@ interface IcsDIEM is IERC4626 {
     /// @notice Emitted when admin recovers accidentally sent tokens.
     event TokenRecovered(address indexed token, address indexed to, uint256 amount);
 
-    /// @notice Emitted when operator deploys DIEM from buffer to Venice staking.
-    event DeployedToVenice(uint256 amount);
+    /// @notice Emitted when anyone claims matured DIEM from Venice.
+    event VeniceClaimed(address indexed caller, uint256 amount);
 
-    /// @notice Emitted when operator initiates buffer replenishment from Venice.
-    event BufferReplenishInitiated(uint256 amount);
+    /// @notice Emitted when anyone redeploys excess liquid DIEM to Venice.
+    event ExcessRedeployed(address indexed caller, uint256 amount);
 
-    /// @notice Emitted when operator completes buffer replenishment after cooldown.
-    event BufferReplenishCompleted(uint256 newBufferBalance);
-
-    // ── Views ─────────────────────────────────────────────────────────────
+    // ── Views ───────────────────────────────────────────────────────────────
 
     function admin() external view returns (address);
-
     function pendingAdmin() external view returns (address);
-
     function operator() external view returns (address);
-
     function paused() external view returns (bool);
 
-    /// @notice Liquid DIEM available for instant withdrawals.
-    function liquidBuffer() external view returns (uint256);
+    /// @notice Total DIEM currently pending redemption across all users.
+    function totalPendingRedemptions() external view returns (uint256);
 
-    /// @notice DIEM currently forward-staked on Venice via DIEM contract.
-    function forwardStaked() external view returns (uint256);
+    /// @notice Redemption request for a specific user.
+    function redemptionRequests(address account) external view returns (uint256 assets, uint256 requestedAt);
 
-    /// @notice DIEM in cooldown, pending unstake from Venice.
-    function pendingUnstake() external view returns (uint256);
+    /// @notice Venice cooldown end timestamp for this contract.
+    function veniceCooldownEnd() external view returns (uint256);
 
-    // ── Operator ──────────────────────────────────────────────────────────
+    /// @notice Delay before redemptions can be completed (matches Venice cooldown).
+    function WITHDRAWAL_DELAY() external view returns (uint256);
 
-    /// @notice Donate DIEM rewards to the vault, increasing share price.
-    /// @param amount Amount of DIEM to donate.
+    // ── Async Redemption ────────────────────────────────────────────────────
+
+    /// @notice Request redemption of shares. Burns shares, starts 24h delay.
+    /// @param shares Number of csDIEM shares to redeem.
+    /// @return assets DIEM amount that will be claimable after delay.
+    function requestRedeem(uint256 shares) external returns (uint256 assets);
+
+    /// @notice Complete redemption after 24h delay + Venice cooldown.
+    function completeRedeem() external;
+
+    // ── Permissionless ──────────────────────────────────────────────────────
+
+    /// @notice Donate DIEM rewards to the vault, increasing share price. Anyone can call.
     function donate(uint256 amount) external;
 
-    /// @notice Deploy idle DIEM from buffer to Venice staking.
-    function deployToVenice(uint256 amount) external;
+    /// @notice Claim matured DIEM from Venice. Anyone can call.
+    function claimFromVenice() external;
 
-    /// @notice Start unstaking DIEM from Venice to replenish buffer.
-    function initiateBufferReplenish(uint256 amount) external;
+    /// @notice Redeploy excess liquid DIEM (above pending redemptions) to Venice.
+    function redeployExcess() external;
 
-    /// @notice Complete buffer replenishment after Venice cooldown expires.
-    function completeBufferReplenish() external;
-
-    // ── Admin ─────────────────────────────────────────────────────────────
+    // ── Admin ───────────────────────────────────────────────────────────────
 
     function pause() external;
-
     function unpause() external;
-
     function setOperator(address newOperator) external;
-
     function transferAdmin(address newAdmin) external;
-
     function acceptAdmin() external;
 
     /// @notice Recover tokens accidentally sent to the vault.
