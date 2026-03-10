@@ -64,6 +64,7 @@ contract csDIEM is ERC4626, IcsDIEM {
     // ── State — redemptions ─────────────────────────────────────────────
 
     uint256 public override totalPendingRedemptions;
+    uint256 public override totalPendingNotInitiated;
     mapping(address => RedemptionRequest) private _redemptionRequests;
 
     // ── Modifiers ───────────────────────────────────────────────────────
@@ -207,12 +208,9 @@ contract csDIEM is ERC4626, IcsDIEM {
         req.assets += assets;
         req.requestedAt = block.timestamp;
         totalPendingRedemptions += assets;
+        totalPendingNotInitiated += assets;
 
-        // Effects — event before external call
         emit RedemptionRequested(msg.sender, shares, assets);
-
-        // Interaction — initiate Venice unstake (starts/resets cooldown)
-        diemStaking.initiateUnstake(assets);
     }
 
     /**
@@ -279,6 +277,24 @@ contract csDIEM is ERC4626, IcsDIEM {
 
         // Interaction
         diemStaking.unstake();
+    }
+
+    /**
+     * @notice Batch-send accumulated redemption amounts to Venice. Anyone can call.
+     * @dev Calls diemStaking.initiateUnstake() once for all pending amounts
+     *      that haven't been sent yet. Minimizes cooldown resets compared to
+     *      calling initiateUnstake() on every individual redemption request.
+     */
+    function initiateVeniceUnstake() external override {
+        uint256 amount = totalPendingNotInitiated;
+        require(amount > 0, "csDIEM: nothing to initiate");
+
+        // Effects
+        totalPendingNotInitiated = 0;
+        emit VeniceUnstakeInitiated(msg.sender, amount);
+
+        // Interaction
+        diemStaking.initiateUnstake(amount);
     }
 
     /**

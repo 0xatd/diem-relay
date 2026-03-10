@@ -62,6 +62,9 @@ interface IcsDIEM is IERC4626 {
     /// @notice Emitted when anyone redeploys excess liquid DIEM to Venice.
     event ExcessRedeployed(address indexed caller, uint256 amount);
 
+    /// @notice Emitted when anyone batches pending unstakes to Venice.
+    event VeniceUnstakeInitiated(address indexed caller, uint256 amount);
+
     // ── Views ───────────────────────────────────────────────────────────────
 
     function admin() external view returns (address);
@@ -71,6 +74,9 @@ interface IcsDIEM is IERC4626 {
 
     /// @notice Total DIEM currently pending redemption across all users.
     function totalPendingRedemptions() external view returns (uint256);
+
+    /// @notice DIEM redemption amounts not yet sent to Venice for unstaking.
+    function totalPendingNotInitiated() external view returns (uint256);
 
     /// @notice Redemption request for a specific user.
     function redemptionRequests(address account) external view returns (uint256 assets, uint256 requestedAt);
@@ -101,6 +107,11 @@ interface IcsDIEM is IERC4626 {
 
     /// @notice Redeploy excess liquid DIEM (above pending redemptions) to Venice.
     function redeployExcess() external;
+
+    /// @notice Batch-send accumulated redemption amounts to Venice. Anyone can call.
+    /// @dev Calls diemStaking.initiateUnstake() once for all pending amounts,
+    ///      minimizing cooldown resets.
+    function initiateVeniceUnstake() external;
 
     // ── Admin ───────────────────────────────────────────────────────────────
 

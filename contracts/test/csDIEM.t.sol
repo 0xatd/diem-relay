@@ -247,6 +247,7 @@ contract csDIEMTest is Test {
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
         uint256 assets = vault.requestRedeem(shares);
+        vault.initiateVeniceUnstake();
 
         // Venice should have pending unstake
         (uint256 staked,, uint256 pending) = diem.stakedInfos(address(vault));
@@ -282,6 +283,7 @@ contract csDIEMTest is Test {
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
         uint256 assets = vault.requestRedeem(shares);
+        vault.initiateVeniceUnstake();
 
         // Warp past delay
         vm.warp(block.timestamp + 24 hours);
@@ -306,6 +308,7 @@ contract csDIEMTest is Test {
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
         uint256 assets = vault.requestRedeem(shares);
+        vault.initiateVeniceUnstake();
 
         vm.warp(block.timestamp + 24 hours);
         vault.claimFromVenice();
@@ -512,6 +515,7 @@ contract csDIEMTest is Test {
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
         vault.requestRedeem(shares);
+        vault.initiateVeniceUnstake();
 
         vm.warp(block.timestamp + 24 hours);
 
@@ -755,6 +759,7 @@ contract csDIEMTest is Test {
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
         vault.requestRedeem(shares);
+        vault.initiateVeniceUnstake();
 
         assertEq(vault.veniceCooldownEnd(), block.timestamp + 24 hours);
     }
@@ -801,6 +806,7 @@ contract csDIEMTest is Test {
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
         uint256 assets = vault.requestRedeem(shares);
+        vault.initiateVeniceUnstake();
 
         // Assets should be ~110 DIEM (deposit + donation)
         assertApproxEqAbs(assets, DEPOSIT_AMOUNT + DONATION_AMOUNT, 1);
@@ -835,6 +841,7 @@ contract csDIEMTest is Test {
         uint256 bobShares = vault.balanceOf(bob);
         vm.prank(bob);
         uint256 bobAssets = vault.requestRedeem(bobShares);
+        vault.initiateVeniceUnstake();
 
         assertEq(vault.totalPendingRedemptions(), aliceAssets + bobAssets);
 
@@ -863,6 +870,7 @@ contract csDIEMTest is Test {
 
         vm.prank(alice);
         uint256 assetsBack = vault.requestRedeem(shares);
+        vault.initiateVeniceUnstake();
 
         // OZ ERC-4626 rounds in favor of the vault — user may lose 1 wei
         assertApproxEqAbs(assetsBack, amount, 1);
