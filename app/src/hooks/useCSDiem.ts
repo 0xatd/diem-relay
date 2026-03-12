@@ -7,6 +7,8 @@ import { CSDIEM_ADDRESS } from "@/config/contracts";
 
 const ONE_SHARE = parseUnits("1", 18);
 
+const isDeployed = CSDIEM_ADDRESS !== zeroAddress;
+
 export function useCSDiem() {
   const { address } = useAccount();
   const user = address ?? zeroAddress;
@@ -19,7 +21,7 @@ export function useCSDiem() {
       { address: CSDIEM_ADDRESS, abi: csDiemAbi, functionName: "paused" },
       { address: CSDIEM_ADDRESS, abi: csDiemAbi, functionName: "balanceOf", args: [user] },
     ],
-    query: { refetchInterval: 15_000 },
+    query: { enabled: isDeployed, refetchInterval: 15_000 },
   });
 
   const get = <T,>(index: number): T | undefined =>
