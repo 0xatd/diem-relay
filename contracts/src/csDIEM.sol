@@ -5,67 +5,71 @@ import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.so
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {ERC20, IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IcsDIEM} from "./interfaces/IcsDIEM.sol";
-import {IDIEMStaking} from "./interfaces/IDIEMStaking.sol";
+import {IsDIEM} from "./interfaces/IsDIEM.sol";
+import {ICLSwapRouter} from "./interfaces/ICLSwapRouter.sol";
+import {OracleLibrary} from "./libraries/OracleLibrary.sol";
 
 /**
  * @title csDIEM — Compounding Staked DIEM
- * @notice ERC-4626 vault: deposit DIEM → receive csDIEM shares.
+ * @notice ERC-4626 auto-compounding wrapper over sDIEM.
  *
- * Anyone can call `donate()` to add DIEM rewards to the vault. This
- * increases `totalAssets()`, pushing the share price up.
+ * Deposit DIEM → staked in sDIEM → earns USDC rewards.
+ * `harvest()` claims USDC, swaps to DIEM via Slipstream, restakes.
+ * Share price increases monotonically as harvested DIEM compounds.
  *
- * Venice forward-staking: all deposited DIEM is immediately
- * forward-staked on Venice for compute credits ($1/day per staked DIEM).
+ * sDIEM is the base layer (stake DIEM, earn USDC).
+ * csDIEM is the composability layer — standard ERC-4626 with increasing
+ * exchange rate, compatible with Pendle, Morpho, Silo, etc.
  *
  * Redemptions use a request/complete pattern with a 24h delay,
- * matching Venice's unstake cooldown. Standard ERC-4626 withdraw()
- * and redeem() are disabled — use requestRedeem()/completeRedeem().
- *
- * Venice management (claimFromVenice, redeployExcess) is fully
- * permissionless — anyone can call when conditions are met.
- *
- * `totalAssets()` is overridden to include forward-staked + pending
- * DIEM minus pending redemptions, ensuring the share price correctly
- * reflects all assets under management.
- *
- * Because csDIEM is a standard ERC-20 with a monotonically increasing
- * exchange rate, it composes with Pendle (PT/YT), Morpho, Silo, and
- * any protocol that accepts yield-bearing tokens.
+ * matching sDIEM's withdrawal delay (which matches Venice's cooldown).
+ * Standard ERC-4626 withdraw()/redeem() are disabled.
  *
  * Security features:
  *   - OZ ERC-4626 with virtual shares/assets (inflation attack mitigation)
+ *   - TWAP-protected USDC→DIEM swaps (anti-sandwich)
  *   - Two-step admin transfer
- *   - Emergency pause (deposits gated; redemption requests always allowed)
- *   - Operator role separation
- *   - Token recovery for accidental sends
- *   - 24h async withdrawal matching Venice cooldown
+ *   - Emergency pause (deposits + harvest gated; redemptions always allowed)
+ *   - ReentrancyGuard on all mutative functions
+ *   - Token recovery for accidental sends (not DIEM/USDC)
  */
-contract csDIEM is ERC4626, IcsDIEM {
+contract csDIEM is ERC4626, IcsDIEM, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ── Constants ────────────────────────────────────────────────────────
 
     uint256 public constant override WITHDRAWAL_DELAY = 24 hours;
-    uint256 public constant MIN_REDEEM_ASSETS = 1e18; // 1 DIEM minimum redemption
+    uint256 public constant MIN_REDEEM_ASSETS = 1e18; // 1 DIEM minimum
+    uint256 private constant BPS_DENOMINATOR = 10_000;
+    uint32 private constant MIN_TWAP_WINDOW = 300; // 5 minutes minimum
+    uint256 private constant SDIEM_MIN_WITHDRAW = 1e18; // sDIEM's minimum
 
     // ── Immutables ──────────────────────────────────────────────────────
 
-    /// @notice The DIEM token contract (which has staking built-in).
-    IDIEMStaking public immutable diemStaking;
+    IsDIEM public immutable override sdiem;
+    IERC20 public immutable override usdc;
 
     // ── State — roles ───────────────────────────────────────────────────
 
     address public override admin;
     address public override pendingAdmin;
-    address public override operator;
     bool public override paused;
+
+    // ── State — harvest config ──────────────────────────────────────────
+
+    address public override swapRouter;
+    address public override oraclePool;
+    uint32 public override twapWindow;
+    int24 public override tickSpacing;
+    uint256 public override maxSlippageBps;
+    uint256 public override minDiemPerUsdc;
+    uint256 public override minHarvest;
 
     // ── State — redemptions ─────────────────────────────────────────────
 
     uint256 public override totalPendingRedemptions;
-    uint256 public override totalPendingNotInitiated;
     mapping(address => RedemptionRequest) private _redemptionRequests;
 
     // ── Modifiers ───────────────────────────────────────────────────────
@@ -84,39 +88,62 @@ contract csDIEM is ERC4626, IcsDIEM {
 
     constructor(
         IERC20 _diem,
+        address _sdiem,
+        address _usdc,
+        address _swapRouter,
+        address _oraclePool,
         address _admin,
-        address _operator
+        uint256 _maxSlippageBps,
+        uint32 _twapWindow,
+        int24 _tickSpacing,
+        uint256 _minHarvest
     )
         ERC20("Compounding Staked DIEM", "csDIEM")
-        ERC4626(IERC20(_diem))
+        ERC4626(_diem)
     {
+        require(_sdiem != address(0), "csDIEM: zero sdiem");
+        require(_usdc != address(0), "csDIEM: zero usdc");
+        require(_swapRouter != address(0), "csDIEM: zero router");
+        require(_oraclePool != address(0), "csDIEM: zero oracle");
         require(_admin != address(0), "csDIEM: zero admin");
-        require(_operator != address(0), "csDIEM: zero operator");
+        require(_maxSlippageBps <= 1000, "csDIEM: slippage > 10%");
+        require(_twapWindow >= MIN_TWAP_WINDOW, "csDIEM: twap too short");
+        require(_tickSpacing > 0, "csDIEM: zero tick spacing");
 
+        sdiem = IsDIEM(_sdiem);
+        usdc = IERC20(_usdc);
+        swapRouter = _swapRouter;
+        oraclePool = _oraclePool;
         admin = _admin;
-        operator = _operator;
-        // DIEM token contract has staking built-in — same address
-        diemStaking = IDIEMStaking(address(_diem));
+        maxSlippageBps = _maxSlippageBps;
+        twapWindow = _twapWindow;
+        tickSpacing = _tickSpacing;
+        minHarvest = _minHarvest;
+
+        // Permanent approval: sDIEM pulls DIEM via safeTransferFrom in stake()
+        _diem.approve(_sdiem, type(uint256).max);
     }
 
     // ── ERC-4626 overrides ─────────────────────────────────────────────
 
     /**
      * @notice Total DIEM assets under management.
-     * @dev liquid + veniceStaked + venicePending - totalPendingRedemptions
+     * @dev sdiemBalance + sdiemPendingWithdrawal + liquidDiem - totalPendingRedemptions
      *
-     *      Subtracting pending redemptions is critical: those shares have
-     *      already been burned, so their DIEM is owed to redeemers and must
-     *      not inflate the share price for remaining holders.
+     *      sdiemBalance: DIEM actively staked in sDIEM (earning rewards)
+     *      sdiemPendingWithdrawal: DIEM in sDIEM's 24h withdrawal queue
+     *      liquidDiem: DIEM sitting in this contract (from completed sDIEM withdrawals)
+     *      totalPendingRedemptions: DIEM owed to redeemers (already burned shares)
      */
     function totalAssets() public view override(ERC4626, IERC4626) returns (uint256) {
-        (uint256 staked,, uint256 pending) = diemStaking.stakedInfos(address(this));
-        uint256 gross = IERC20(asset()).balanceOf(address(this)) + staked + pending;
-        // Pending redemptions are owed to users, not part of vault value
+        uint256 sdiemBal = sdiem.balanceOf(address(this));
+        (uint256 sdiemPending,) = sdiem.withdrawalRequests(address(this));
+        uint256 liquid = IERC20(asset()).balanceOf(address(this));
+        uint256 gross = sdiemBal + sdiemPending + liquid;
         return gross > totalPendingRedemptions ? gross - totalPendingRedemptions : 0;
     }
 
-    /// @dev Gate deposits behind pause. Forward DIEM to Venice after deposit.
+    /// @dev Gate deposits behind pause. Forward DIEM to sDIEM after deposit.
     function _deposit(
         address caller,
         address receiver,
@@ -124,9 +151,8 @@ contract csDIEM is ERC4626, IcsDIEM {
         uint256 shares
     ) internal override whenNotPaused {
         super._deposit(caller, receiver, assets, shares);
-
-        // Forward deposited DIEM to Venice immediately
-        diemStaking.stake(assets);
+        // Forward deposited DIEM to sDIEM immediately
+        sdiem.stake(assets);
     }
 
     /**
@@ -144,21 +170,16 @@ contract csDIEM is ERC4626, IcsDIEM {
     }
 
     /// @notice Always returns 0 — standard ERC-4626 withdrawals are disabled.
-    /// @dev Users must use requestRedeem()/completeRedeem() instead.
     function maxWithdraw(address) public pure override(ERC4626, IERC4626) returns (uint256) {
         return 0;
     }
 
     /// @notice Always returns 0 — standard ERC-4626 redemptions are disabled.
-    /// @dev Users must use requestRedeem()/completeRedeem() instead.
     function maxRedeem(address) public pure override(ERC4626, IERC4626) returns (uint256) {
         return 0;
     }
 
     /// @dev Use 1e6 offset for inflation attack protection.
-    /// With 18-decimal DIEM, this means the vault effectively operates at
-    /// 24 decimal precision internally, making donation attacks cost ~1e6
-    /// DIEM to steal 1 wei of value — economically infeasible.
     function _decimalsOffset() internal pure override returns (uint8) {
         return 6;
     }
@@ -170,10 +191,10 @@ contract csDIEM is ERC4626, IcsDIEM {
         external
         view
         override
-        returns (uint256 assets, uint256 requestedAt)
+        returns (uint256 assets, uint256 shares, uint256 requestedAt)
     {
         RedemptionRequest storage req = _redemptionRequests[account];
-        return (req.assets, req.requestedAt);
+        return (req.assets, req.shares, req.requestedAt);
     }
 
     /// @inheritdoc IcsDIEM
@@ -181,18 +202,42 @@ contract csDIEM is ERC4626, IcsDIEM {
         RedemptionRequest storage req = _redemptionRequests[account];
         if (req.assets == 0) return false;
         if (block.timestamp < req.requestedAt + WITHDRAWAL_DELAY) return false;
+        // Check liquid DIEM + completable sDIEM withdrawal
         uint256 liquid = IERC20(asset()).balanceOf(address(this));
-        (,uint256 cooldownEnd, uint256 pending) = diemStaking.stakedInfos(address(this));
-        if (pending > 0 && block.timestamp >= cooldownEnd) {
-            liquid += pending;
+        if (liquid >= req.assets) return true;
+        // Would completing sDIEM withdrawal give us enough?
+        (uint256 sdiemPending,) = sdiem.withdrawalRequests(address(this));
+        if (sdiemPending > 0 && sdiem.canCompleteWithdraw(address(this))) {
+            return liquid + sdiemPending >= req.assets;
         }
-        return liquid >= req.assets;
+        return false;
     }
 
     /// @inheritdoc IcsDIEM
-    function veniceCooldownEnd() external view override returns (uint256) {
-        (, uint256 cooldownEnd,) = diemStaking.stakedInfos(address(this));
-        return cooldownEnd;
+    function pendingHarvest() external view override returns (uint256) {
+        return sdiem.earned(address(this));
+    }
+
+    // ── Harvest (permissionless) ────────────────────────────────────────
+
+    /**
+     * @notice Claim USDC rewards from sDIEM, swap to DIEM, restake.
+     * @dev Anyone can call. TWAP oracle protects against sandwich attacks.
+     *      Reverts if accrued USDC is below minHarvest threshold.
+     */
+    function harvest() external override nonReentrant whenNotPaused {
+        // 1. Claim accrued USDC from sDIEM
+        sdiem.claimReward();
+        uint256 usdcBal = usdc.balanceOf(address(this));
+        require(usdcBal >= minHarvest, "csDIEM: below min harvest");
+
+        // 2. Swap USDC → DIEM via Slipstream (TWAP-protected)
+        uint256 diemReceived = _swapUsdcToDiem(usdcBal);
+
+        // 3. Restake DIEM into sDIEM (compounding)
+        sdiem.stake(diemReceived);
+
+        emit Harvested(msg.sender, usdcBal, diemReceived);
     }
 
     // ── Async Redemption ────────────────────────────────────────────────
@@ -200,20 +245,18 @@ contract csDIEM is ERC4626, IcsDIEM {
     /**
      * @notice Request redemption of csDIEM shares. Burns shares, starts 24h delay.
      * @dev Burns shares at current exchange rate, records DIEM amount owed.
-     *      Initiates Venice unstake for the DIEM amount.
-     *      If user has an existing pending redemption, amounts accumulate
-     *      without resetting the timer (preserves original delay).
-     *      Minimum redemption: 1 DIEM (prevents dust griefing of Venice queue).
+     *      Best-effort: initiates sDIEM withdrawal if balance allows.
+     *      Always allowed, even when paused (users must be able to exit).
      * @param shares Number of csDIEM shares to redeem.
      * @return assets DIEM amount that will be claimable after delay.
      */
-    function requestRedeem(uint256 shares) external override returns (uint256 assets) {
+    function requestRedeem(uint256 shares) external override nonReentrant returns (uint256 assets) {
         require(shares > 0, "csDIEM: zero shares");
         require(balanceOf(msg.sender) >= shares, "csDIEM: insufficient shares");
 
         // Calculate DIEM owed at current exchange rate BEFORE burning
         assets = previewRedeem(shares);
-        require(assets >= MIN_REDEEM_ASSETS, "csDIEM: below minimum redeem");
+        require(assets >= MIN_REDEEM_ASSETS, "csDIEM: below min redeem");
 
         // Effects — burn shares
         _burn(msg.sender, shares);
@@ -221,79 +264,81 @@ contract csDIEM is ERC4626, IcsDIEM {
         // Track pending redemption
         RedemptionRequest storage req = _redemptionRequests[msg.sender];
         req.assets += assets;
+        req.shares += shares;
         // Only set timer on first request — accumulating doesn't reset delay
         if (req.requestedAt == 0) {
             req.requestedAt = block.timestamp;
         }
         totalPendingRedemptions += assets;
-        totalPendingNotInitiated += assets;
 
         emit RedemptionRequested(msg.sender, shares, assets);
 
-        // Auto-initiate Venice unstake if possible
-        _tryInitiateVeniceUnstake();
+        // Best-effort: initiate sDIEM withdrawal for pending redemptions
+        _tryWithdrawFromSdiem();
     }
 
     /**
      * @notice Complete redemption after 24h delay.
-     * @dev Auto-claims from Venice if cooldown has matured but hasn't
-     *      been claimed yet. Only reverts if Venice cooldown is still active.
+     * @dev Auto-completes sDIEM withdrawal if needed and ready.
+     *      Always allowed, even when paused.
      */
-    function completeRedeem() external override {
+    function completeRedeem() external override nonReentrant {
         RedemptionRequest storage req = _redemptionRequests[msg.sender];
         uint256 assets = req.assets;
         require(assets > 0, "csDIEM: no pending redemption");
         require(
             block.timestamp >= req.requestedAt + WITHDRAWAL_DELAY,
-            "csDIEM: withdrawal delay not met"
+            "csDIEM: delay not met"
         );
 
-        // Auto-claim from Venice if matured but not yet claimed
+        // Ensure we have enough liquid DIEM
         uint256 liquid = IERC20(asset()).balanceOf(address(this));
         if (liquid < assets) {
-            (,, uint256 pending) = diemStaking.stakedInfos(address(this));
-            if (pending > 0) {
-                diemStaking.unstake();
+            // Try to complete sDIEM withdrawal
+            (uint256 sdiemPending,) = sdiem.withdrawalRequests(address(this));
+            if (sdiemPending > 0) {
+                sdiem.completeWithdraw();
                 liquid = IERC20(asset()).balanceOf(address(this));
             }
         }
-        require(liquid >= assets, "csDIEM: Venice cooldown not finished");
+        require(liquid >= assets, "csDIEM: insufficient liquid DIEM");
 
         // Effects
         req.assets = 0;
+        req.shares = 0;
         req.requestedAt = 0;
         totalPendingRedemptions -= assets;
 
+        emit RedemptionCompleted(msg.sender, assets);
+
         // Interaction
         IERC20(asset()).safeTransfer(msg.sender, assets);
-
-        emit RedemptionCompleted(msg.sender, assets);
     }
 
     /**
      * @notice Cancel a pending redemption. Mints new shares at current rate.
-     * @dev Re-mints shares for the pending DIEM amount at the current exchange
-     *      rate. The user may receive fewer shares than they originally burned
-     *      if the share price increased since their request (due to donations).
+     * @dev The user may receive fewer shares than originally burned if the
+     *      share price increased since their request (due to harvests).
+     *      Does NOT cancel the sDIEM withdrawal — excess DIEM will be
+     *      restaked via redeployExcess() after sDIEM withdrawal completes.
+     *      Always allowed, even when paused.
      */
-    function cancelRedeem() external override {
+    function cancelRedeem() external override nonReentrant {
         RedemptionRequest storage req = _redemptionRequests[msg.sender];
         uint256 assets = req.assets;
+        uint256 shares = req.shares;
         require(assets > 0, "csDIEM: no pending redemption");
 
         // Effects
         req.assets = 0;
+        req.shares = 0;
         req.requestedAt = 0;
         totalPendingRedemptions -= assets;
-        // Fix: decrement pending-not-initiated to prevent phantom Venice unstakes
-        if (totalPendingNotInitiated >= assets) {
-            totalPendingNotInitiated -= assets;
-        } else {
-            totalPendingNotInitiated = 0;
-        }
 
-        // Re-mint shares at current exchange rate
-        uint256 shares = previewDeposit(assets);
+        // Re-mint the exact shares that were burned.
+        // Using stored shares instead of previewDeposit avoids the ERC-4626
+        // virtual shares edge case when totalSupply == 0 (which would give
+        // the user far fewer shares than they originally had).
         _mint(msg.sender, shares);
 
         emit RedemptionCancelled(msg.sender, assets, shares);
@@ -302,102 +347,104 @@ contract csDIEM is ERC4626, IcsDIEM {
     // ── Permissionless ──────────────────────────────────────────────────
 
     /**
-     * @notice Donate DIEM rewards to the vault, increasing share price.
-     * @dev Anyone can call. Donor must have approved this contract.
-     *      The donated DIEM increases `totalAssets()` without minting
-     *      new shares, so existing share prices go up.
-     *      Inflation attack mitigated by _decimalsOffset=6.
-     * @param amount Amount of DIEM to donate.
+     * @notice Restake excess liquid DIEM into sDIEM. Anyone can call.
+     * @dev After sDIEM withdrawal completes, excess DIEM (beyond what's
+     *      needed for pending redemptions) should be earning yield.
      */
-    function donate(uint256 amount) external override {
-        require(amount > 0, "csDIEM: zero amount");
-
-        // Effects — event before external calls
-        emit RewardDonated(msg.sender, amount);
-
-        // Interactions — pull DIEM then forward to Venice
-        IERC20(asset()).safeTransferFrom(msg.sender, address(this), amount);
-        diemStaking.stake(amount);
-    }
-
-    /**
-     * @notice Claim matured DIEM from Venice. Anyone can call.
-     * @dev Calls diemStaking.unstake() which transfers all pending
-     *      DIEM back after cooldown. Reverts if cooldown hasn't expired.
-     */
-    function claimFromVenice() external override {
-        (,, uint256 pending) = diemStaking.stakedInfos(address(this));
-        require(pending > 0, "csDIEM: nothing pending on Venice");
-
-        // Effects — event before external call
-        emit VeniceClaimed(msg.sender, pending);
-
-        // Interaction
-        diemStaking.unstake();
-    }
-
-    /**
-     * @notice Batch-send accumulated redemption amounts to Venice. Anyone can call.
-     * @dev Claims matured cooldown first (M-01 fix) to prevent re-locking.
-     *      Reverts if Venice cooldown is still active or nothing to initiate.
-     */
-    function initiateVeniceUnstake() external override onlyAdmin {
-        require(totalPendingNotInitiated > 0, "csDIEM: nothing to initiate");
-        _tryInitiateVeniceUnstake();
-    }
-
-    /**
-     * @dev Internal: attempt to initiate Venice unstake for all pending amounts.
-     *      - If matured pending exists, claims it first (M-01 fix).
-     *      - If cooldown is active, silently returns (no revert for auto-calls).
-     */
-    function _tryInitiateVeniceUnstake() internal {
-        uint256 amount = totalPendingNotInitiated;
-        if (amount == 0) return;
-
-        (uint256 staked, uint256 cooldownEnd, uint256 pending) = diemStaking.stakedInfos(address(this));
-
-        if (pending > 0) {
-            if (block.timestamp >= cooldownEnd) {
-                // M-01 fix: claim matured cooldown before initiating new one
-                diemStaking.unstake();
-            } else {
-                // Cooldown still active — can't initiate, return silently
-                return;
-            }
-        }
-
-        // Cap to what's actually staked to prevent phantom unstakes
-        // (totalPendingNotInitiated can be inflated by cancel/complete flows)
-        if (amount > staked) {
-            amount = staked;
-        }
-
-        // Effects
-        totalPendingNotInitiated = 0;
-        if (amount == 0) return;
-        emit VeniceUnstakeInitiated(msg.sender, amount);
-
-        // Interaction
-        diemStaking.initiateUnstake(amount);
-    }
-
-    /**
-     * @notice Redeploy excess liquid DIEM to Venice. Anyone can call.
-     * @dev Any liquid DIEM beyond what's needed for pending redemptions
-     *      is excess and should be earning Venice compute credits.
-     */
-    function redeployExcess() external override {
+    function redeployExcess() external override nonReentrant {
         uint256 liquid = IERC20(asset()).balanceOf(address(this));
-        require(liquid > totalPendingRedemptions, "csDIEM: no excess to redeploy");
+        require(liquid > totalPendingRedemptions, "csDIEM: no excess");
 
         uint256 excess = liquid - totalPendingRedemptions;
 
-        // Effects — event before external call
         emit ExcessRedeployed(msg.sender, excess);
 
-        // Interaction — forward excess to Venice
-        diemStaking.stake(excess);
+        sdiem.stake(excess);
+    }
+
+    /**
+     * @notice Ensure sDIEM withdrawal is initiated for pending redemptions.
+     * @dev Anyone can call. Calculates the deficit between what's needed
+     *      (totalPendingRedemptions) and what's covered (liquid + sDIEM pending),
+     *      then requests the difference from sDIEM.
+     */
+    function syncWithdrawals() external override nonReentrant {
+        _tryWithdrawFromSdiem();
+    }
+
+    // ── Internal ────────────────────────────────────────────────────────
+
+    /**
+     * @dev Attempt to initiate sDIEM withdrawal for uncovered pending redemptions.
+     *      - Calculates deficit: needed - (liquid + sdiemPending)
+     *      - Caps to sDIEM balance
+     *      - Skips if below sDIEM minimum withdraw
+     */
+    function _tryWithdrawFromSdiem() internal {
+        uint256 needed = totalPendingRedemptions;
+        if (needed == 0) return;
+
+        // What do we already have available?
+        uint256 liquid = IERC20(asset()).balanceOf(address(this));
+        (uint256 sdiemPending,) = sdiem.withdrawalRequests(address(this));
+        uint256 covered = liquid + sdiemPending;
+        if (covered >= needed) return;
+
+        uint256 deficit = needed - covered;
+        uint256 sdiemBal = sdiem.balanceOf(address(this));
+        if (sdiemBal == 0) return;
+
+        uint256 toRequest = deficit > sdiemBal ? sdiemBal : deficit;
+        if (toRequest < SDIEM_MIN_WITHDRAW) return;
+
+        sdiem.requestWithdraw(toRequest);
+    }
+
+    /**
+     * @dev Swap USDC → DIEM via Slipstream CL with TWAP-based slippage protection.
+     *      Identical to the swap logic previously in RevenueSplitter.
+     */
+    function _swapUsdcToDiem(uint256 usdcAmount) internal returns (uint256) {
+        // 1. Query CL TWAP oracle for fair price
+        int24 arithmeticMeanTick = OracleLibrary.consult(oraclePool, twapWindow);
+        uint256 twapOut = OracleLibrary.getQuoteAtTick(
+            arithmeticMeanTick,
+            uint128(usdcAmount),
+            address(usdc),
+            asset()
+        );
+
+        // 2. Apply slippage tolerance
+        uint256 amountOutMin = (twapOut * (BPS_DENOMINATOR - maxSlippageBps)) / BPS_DENOMINATOR;
+
+        // 3. Circuit breaker: enforce absolute minimum DIEM-per-USDC floor
+        if (minDiemPerUsdc > 0) {
+            uint256 absoluteMin = (usdcAmount * minDiemPerUsdc) / 1e6;
+            require(amountOutMin >= absoluteMin, "csDIEM: price below floor");
+        }
+
+        // 4. Approve router to spend USDC
+        usdc.forceApprove(swapRouter, usdcAmount);
+
+        // 5. Execute swap via Slipstream exactInputSingle
+        uint256 amountOut = ICLSwapRouter(swapRouter).exactInputSingle(
+            ICLSwapRouter.ExactInputSingleParams({
+                tokenIn: address(usdc),
+                tokenOut: asset(),
+                tickSpacing: tickSpacing,
+                recipient: address(this),
+                deadline: block.timestamp + 300,
+                amountIn: usdcAmount,
+                amountOutMinimum: amountOutMin,
+                sqrtPriceLimitX96: 0
+            })
+        );
+
+        // 6. Revoke residual allowance
+        usdc.forceApprove(swapRouter, 0);
+
+        require(amountOut > 0, "csDIEM: swap returned zero");
+        return amountOut;
     }
 
     // ── Admin ──────────────────────────────────────────────────────────
@@ -412,21 +459,12 @@ contract csDIEM is ERC4626, IcsDIEM {
         emit Unpaused(msg.sender);
     }
 
-    function setOperator(address newOperator) external override onlyAdmin {
-        require(newOperator != address(0), "csDIEM: zero operator");
-        address oldOperator = operator;
-        operator = newOperator;
-        emit OperatorChanged(oldOperator, newOperator);
-    }
-
-    /// @notice Start two-step admin transfer.
     function transferAdmin(address newAdmin) external override onlyAdmin {
         require(newAdmin != address(0), "csDIEM: zero admin");
         pendingAdmin = newAdmin;
         emit AdminTransferStarted(admin, newAdmin);
     }
 
-    /// @notice Pending admin accepts the role.
     function acceptAdmin() external override {
         require(msg.sender == pendingAdmin, "csDIEM: not pending admin");
         address oldAdmin = admin;
@@ -435,14 +473,62 @@ contract csDIEM is ERC4626, IcsDIEM {
         emit AdminTransferred(oldAdmin, msg.sender);
     }
 
+    function setSwapRouter(address newRouter) external override onlyAdmin {
+        require(newRouter != address(0), "csDIEM: zero router");
+        address old = swapRouter;
+        swapRouter = newRouter;
+        emit SwapRouterUpdated(old, newRouter);
+    }
+
+    function setMaxSlippage(uint256 newSlippage) external override onlyAdmin {
+        require(newSlippage <= 1000, "csDIEM: slippage > 10%");
+        uint256 old = maxSlippageBps;
+        maxSlippageBps = newSlippage;
+        emit MaxSlippageUpdated(old, newSlippage);
+    }
+
+    function setOraclePool(address newPool) external override onlyAdmin {
+        require(newPool != address(0), "csDIEM: zero oracle");
+        address old = oraclePool;
+        oraclePool = newPool;
+        emit OraclePoolUpdated(old, newPool);
+    }
+
+    function setTwapWindow(uint32 newWindow) external override onlyAdmin {
+        require(newWindow >= MIN_TWAP_WINDOW, "csDIEM: twap too short");
+        uint32 old = twapWindow;
+        twapWindow = newWindow;
+        emit TwapWindowUpdated(old, newWindow);
+    }
+
+    function setTickSpacing(int24 newSpacing) external override onlyAdmin {
+        require(newSpacing > 0, "csDIEM: zero tick spacing");
+        int24 old = tickSpacing;
+        tickSpacing = newSpacing;
+        emit TickSpacingUpdated(old, newSpacing);
+    }
+
+    function setMinDiemPerUsdc(uint256 newMin) external override onlyAdmin {
+        uint256 old = minDiemPerUsdc;
+        minDiemPerUsdc = newMin;
+        emit MinDiemPerUsdcUpdated(old, newMin);
+    }
+
+    function setMinHarvest(uint256 newMin) external override onlyAdmin {
+        uint256 old = minHarvest;
+        minHarvest = newMin;
+        emit MinHarvestUpdated(old, newMin);
+    }
+
     /// @notice Recover tokens accidentally sent to the vault.
-    /// @dev Cannot recover the underlying DIEM to protect depositors.
+    /// @dev Cannot recover DIEM (underlying) or USDC (harvest intermediate).
     function recoverERC20(
         address token,
         address to,
         uint256 amount
     ) external override onlyAdmin {
-        require(token != asset(), "csDIEM: cannot recover underlying");
+        require(token != asset(), "csDIEM: cannot recover DIEM");
+        require(token != address(usdc), "csDIEM: cannot recover USDC");
         require(to != address(0), "csDIEM: zero to");
         IERC20(token).safeTransfer(to, amount);
         emit TokenRecovered(token, to, amount);
