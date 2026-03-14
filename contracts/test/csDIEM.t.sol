@@ -508,6 +508,52 @@ contract csDIEMTest is Test {
         vault.cancelRedeem();
     }
 
+    // ── Concurrent Redemptions (partial sDIEM withdrawal) ───────────────
+
+    function test_concurrentRedemptions_noDeadlock() public {
+        // Alice and Bob both deposit and redeem at different times.
+        // The second redemption's Venice unstake is blocked by cooldown.
+        // With partial sDIEM withdrawals, Alice isn't blocked by Bob.
+        vm.prank(alice);
+        vault.deposit(DEPOSIT_AMOUNT, alice);
+        vm.prank(bob);
+        vault.deposit(DEPOSIT_AMOUNT, bob);
+
+        // Alice redeems — auto-initiates Venice unstake via sDIEM
+        uint256 aliceShares = vault.balanceOf(alice);
+        vm.prank(alice);
+        vault.requestRedeem(aliceShares);
+
+        // Bob redeems 1 hour later — Venice cooldown is active
+        vm.warp(block.timestamp + 1 hours);
+        uint256 bobShares = vault.balanceOf(bob);
+        vm.prank(bob);
+        vault.requestRedeem(bobShares);
+
+        // Wait for 24h delay (from Alice's request time)
+        vm.warp(block.timestamp + 24 hours);
+
+        // Alice completes — partial sDIEM withdrawal gives her portion.
+        // sDIEM auto-initiates Venice unstake for Bob's portion.
+        uint256 aliceDiemBefore = diem.balanceOf(alice);
+        vm.prank(alice);
+        vault.completeRedeem();
+
+        assertGt(diem.balanceOf(alice), aliceDiemBefore); // Alice got her DIEM
+
+        // Bob waits for second Venice cooldown
+        vm.warp(block.timestamp + 24 hours);
+
+        uint256 bobDiemBefore = diem.balanceOf(bob);
+        vm.prank(bob);
+        vault.completeRedeem();
+
+        assertGt(diem.balanceOf(bob), bobDiemBefore); // Bob got his DIEM
+
+        // All redemptions cleared
+        assertEq(vault.totalPendingRedemptions(), 0);
+    }
+
     // ── Redeploy Excess ─────────────────────────────────────────────────
 
     function test_redeployExcess_success() public {

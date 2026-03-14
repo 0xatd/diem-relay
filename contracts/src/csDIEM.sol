@@ -279,7 +279,9 @@ contract csDIEM is ERC4626, IcsDIEM, ReentrancyGuard {
 
     /**
      * @notice Complete redemption after 24h delay.
-     * @dev Auto-completes sDIEM withdrawal if needed and ready.
+     * @dev Auto-completes sDIEM withdrawal if needed and ready (partial ok).
+     *      With partial sDIEM withdrawals, one user's unfunded portion
+     *      doesn't block other users from completing their redemptions.
      *      Always allowed, even when paused.
      */
     function completeRedeem() external override nonReentrant {
@@ -294,10 +296,12 @@ contract csDIEM is ERC4626, IcsDIEM, ReentrancyGuard {
         // Ensure we have enough liquid DIEM
         uint256 liquid = IERC20(asset()).balanceOf(address(this));
         if (liquid < assets) {
-            // Try to complete sDIEM withdrawal
+            // Try to complete sDIEM withdrawal (supports partial payouts).
+            // Use try/catch: sDIEM may revert with "nothing claimable yet"
+            // if Venice cooldown hasn't matured for the remaining batch.
             (uint256 sdiemPending,) = sdiem.withdrawalRequests(address(this));
             if (sdiemPending > 0) {
-                sdiem.completeWithdraw();
+                try sdiem.completeWithdraw() {} catch {}
                 liquid = IERC20(asset()).balanceOf(address(this));
             }
         }
