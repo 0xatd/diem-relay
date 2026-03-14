@@ -265,10 +265,8 @@ contract csDIEM is ERC4626, IcsDIEM, ReentrancyGuard {
         RedemptionRequest storage req = _redemptionRequests[msg.sender];
         req.assets += assets;
         req.shares += shares;
-        // Only set timer on first request — accumulating doesn't reset delay
-        if (req.requestedAt == 0) {
-            req.requestedAt = block.timestamp;
-        }
+        // Always reset timer — each new request enforces a fresh 24h delay
+        req.requestedAt = block.timestamp;
         totalPendingRedemptions += assets;
 
         emit RedemptionRequested(msg.sender, shares, assets);

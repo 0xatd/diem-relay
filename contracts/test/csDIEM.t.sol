@@ -318,16 +318,16 @@ contract csDIEMTest is Test {
         vm.prank(alice);
         uint256 assets1 = vault.requestRedeem(firstBatch);
 
-        uint256 originalRequestedAt = block.timestamp;
         vm.warp(block.timestamp + 12 hours);
+        uint256 newRequestedAt = block.timestamp;
 
-        // Second request — accumulates, preserves original timer
+        // Second request — accumulates, resets timer (prevents delay bypass)
         vm.prank(alice);
         uint256 assets2 = vault.requestRedeem(secondBatch);
 
         (uint256 pendingAssets,, uint256 requestedAt) = vault.redemptionRequests(alice);
         assertEq(pendingAssets, assets1 + assets2);
-        assertEq(requestedAt, originalRequestedAt); // Timer NOT reset
+        assertEq(requestedAt, newRequestedAt); // Timer RESET to enforce fresh 24h delay
     }
 
     function test_requestRedeem_allowedWhenPaused() public {
