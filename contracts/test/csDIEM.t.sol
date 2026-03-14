@@ -247,9 +247,8 @@ contract csDIEMTest is Test {
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
         uint256 assets = vault.requestRedeem(shares);
-        vault.initiateVeniceUnstake();
 
-        // Venice should have pending unstake
+        // Venice unstake should be auto-initiated by requestRedeem
         (uint256 staked,, uint256 pending) = diem.stakedInfos(address(vault));
         assertEq(staked, 0);
         assertEq(pending, assets);
@@ -283,13 +282,9 @@ contract csDIEMTest is Test {
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
         uint256 assets = vault.requestRedeem(shares);
-        vault.initiateVeniceUnstake();
 
         // Warp past delay
         vm.warp(block.timestamp + 24 hours);
-
-        // Claim from Venice
-        vault.claimFromVenice();
 
         uint256 balBefore = diem.balanceOf(alice);
         vm.prank(alice);
@@ -308,10 +303,8 @@ contract csDIEMTest is Test {
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
         uint256 assets = vault.requestRedeem(shares);
-        vault.initiateVeniceUnstake();
 
         vm.warp(block.timestamp + 24 hours);
-        vault.claimFromVenice();
 
         vm.expectEmit(true, false, false, true);
         emit IcsDIEM.RedemptionCompleted(alice, assets);
@@ -342,7 +335,7 @@ contract csDIEMTest is Test {
         vault.completeRedeem();
     }
 
-    function test_completeRedeem_revertsInsufficientLiquidity() public {
+    function test_completeRedeem_revertsVeniceCooldownNotFinished() public {
         vm.prank(alice);
         vault.deposit(DEPOSIT_AMOUNT, alice);
 
@@ -350,11 +343,13 @@ contract csDIEMTest is Test {
         vm.prank(alice);
         vault.requestRedeem(shares);
 
-        vm.warp(block.timestamp + 24 hours);
+        // Warp past withdrawal delay but NOT past Venice cooldown
+        // (Venice cooldown is also 24h but started at requestRedeem time)
+        // Try completing immediately — cooldown not finished
+        vm.warp(block.timestamp + 12 hours);
 
-        // Don't claim from Venice
         vm.prank(alice);
-        vm.expectRevert("csDIEM: claim from Venice first");
+        vm.expectRevert("csDIEM: withdrawal delay not met");
         vault.completeRedeem();
     }
 
@@ -511,11 +506,10 @@ contract csDIEMTest is Test {
         vm.prank(alice);
         vault.deposit(DEPOSIT_AMOUNT, alice);
 
-        // Request redeem to trigger initiateUnstake
+        // Request redeem — auto-initiates Venice unstake
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
         vault.requestRedeem(shares);
-        vault.initiateVeniceUnstake();
 
         vm.warp(block.timestamp + 24 hours);
 
@@ -759,8 +753,8 @@ contract csDIEMTest is Test {
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
         vault.requestRedeem(shares);
-        vault.initiateVeniceUnstake();
 
+        // Venice unstake auto-initiated by requestRedeem
         assertEq(vault.veniceCooldownEnd(), block.timestamp + 24 hours);
     }
 
@@ -802,11 +796,10 @@ contract csDIEMTest is Test {
         vm.prank(donor);
         vault.donate(DONATION_AMOUNT);
 
-        // 3. Alice requests full redeem
+        // 3. Alice requests full redeem (auto-initiates Venice unstake)
         uint256 shares = vault.balanceOf(alice);
         vm.prank(alice);
         uint256 assets = vault.requestRedeem(shares);
-        vault.initiateVeniceUnstake();
 
         // Assets should be ~110 DIEM (deposit + donation)
         assertApproxEqAbs(assets, DEPOSIT_AMOUNT + DONATION_AMOUNT, 1);
@@ -814,10 +807,7 @@ contract csDIEMTest is Test {
         // 4. Wait for delay
         vm.warp(block.timestamp + 24 hours);
 
-        // 5. Anyone claims from Venice
-        vault.claimFromVenice();
-
-        // 6. Alice completes redemption
+        // 5. Alice completes redemption (auto-claims from Venice)
         uint256 diemBefore = diem.balanceOf(alice);
         vm.prank(alice);
         vault.completeRedeem();
@@ -833,25 +823,32 @@ contract csDIEMTest is Test {
         vm.prank(bob);
         vault.deposit(DEPOSIT_AMOUNT, bob);
 
-        // Both request full redeem
+        // Alice requests redeem — auto-initiates Venice unstake for her portion
         uint256 aliceShares = vault.balanceOf(alice);
         vm.prank(alice);
         uint256 aliceAssets = vault.requestRedeem(aliceShares);
 
+        // Bob requests redeem — _tryInitiateVeniceUnstake silently skips (active cooldown)
         uint256 bobShares = vault.balanceOf(bob);
         vm.prank(bob);
         uint256 bobAssets = vault.requestRedeem(bobShares);
-        vault.initiateVeniceUnstake();
 
         assertEq(vault.totalPendingRedemptions(), aliceAssets + bobAssets);
 
-        // Wait and claim
+        // Wait past delay — Alice's Venice cooldown matures
         vm.warp(block.timestamp + 24 hours);
-        vault.claimFromVenice();
 
-        // Both complete
+        // Alice completes (auto-claims from Venice)
         vm.prank(alice);
         vault.completeRedeem();
+
+        // Bob's portion was never initiated on Venice — initiate now
+        vault.initiateVeniceUnstake();
+
+        // Wait for Bob's Venice cooldown
+        vm.warp(block.timestamp + 24 hours);
+
+        // Bob completes (auto-claims from Venice)
         vm.prank(bob);
         vault.completeRedeem();
 
@@ -870,15 +867,13 @@ contract csDIEMTest is Test {
 
         vm.prank(alice);
         uint256 assetsBack = vault.requestRedeem(shares);
-        vault.initiateVeniceUnstake();
 
         // OZ ERC-4626 rounds in favor of the vault — user may lose 1 wei
         assertApproxEqAbs(assetsBack, amount, 1);
         assertLe(assetsBack, amount); // Never more than deposited
 
-        // Complete the withdrawal
+        // Complete the withdrawal (auto-claims from Venice)
         vm.warp(block.timestamp + 24 hours);
-        vault.claimFromVenice();
         vm.prank(alice);
         vault.completeRedeem();
 

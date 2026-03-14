@@ -38,6 +38,9 @@ interface IcsDIEM is IERC4626 {
     /// @notice Emitted when a user completes redemption after delay.
     event RedemptionCompleted(address indexed user, uint256 assets);
 
+    /// @notice Emitted when a user cancels a pending redemption.
+    event RedemptionCancelled(address indexed user, uint256 assets, uint256 sharesMinted);
+
     /// @notice Emitted when admin pauses the vault.
     event Paused(address indexed by);
 
@@ -81,6 +84,9 @@ interface IcsDIEM is IERC4626 {
     /// @notice Redemption request for a specific user.
     function redemptionRequests(address account) external view returns (uint256 assets, uint256 requestedAt);
 
+    /// @notice Check if a user can complete their redemption right now.
+    function canCompleteRedeem(address account) external view returns (bool);
+
     /// @notice Venice cooldown end timestamp for this contract.
     function veniceCooldownEnd() external view returns (uint256);
 
@@ -94,8 +100,11 @@ interface IcsDIEM is IERC4626 {
     /// @return assets DIEM amount that will be claimable after delay.
     function requestRedeem(uint256 shares) external returns (uint256 assets);
 
-    /// @notice Complete redemption after 24h delay + Venice cooldown.
+    /// @notice Complete redemption after 24h delay. Auto-claims from Venice if matured.
     function completeRedeem() external;
+
+    /// @notice Cancel pending redemption. Re-mints shares at current exchange rate.
+    function cancelRedeem() external;
 
     // ── Permissionless ──────────────────────────────────────────────────────
 

@@ -176,6 +176,19 @@ contract csDIEM is ERC4626, IcsDIEM {
     }
 
     /// @inheritdoc IcsDIEM
+    function canCompleteRedeem(address account) external view override returns (bool) {
+        RedemptionRequest storage req = _redemptionRequests[account];
+        if (req.assets == 0) return false;
+        if (block.timestamp < req.requestedAt + WITHDRAWAL_DELAY) return false;
+        uint256 liquid = IERC20(asset()).balanceOf(address(this));
+        (,uint256 cooldownEnd, uint256 pending) = diemStaking.stakedInfos(address(this));
+        if (pending > 0 && block.timestamp >= cooldownEnd) {
+            liquid += pending;
+        }
+        return liquid >= req.assets;
+    }
+
+    /// @inheritdoc IcsDIEM
     function veniceCooldownEnd() external view override returns (uint256) {
         (, uint256 cooldownEnd,) = diemStaking.stakedInfos(address(this));
         return cooldownEnd;
@@ -211,13 +224,15 @@ contract csDIEM is ERC4626, IcsDIEM {
         totalPendingNotInitiated += assets;
 
         emit RedemptionRequested(msg.sender, shares, assets);
+
+        // Auto-initiate Venice unstake if possible
+        _tryInitiateVeniceUnstake();
     }
 
     /**
      * @notice Complete redemption after 24h delay.
-     * @dev Requires:
-     *      1. User's personal 24h delay has elapsed
-     *      2. Contract has enough liquid DIEM (call claimFromVenice first if needed)
+     * @dev Auto-claims from Venice if cooldown has matured but hasn't
+     *      been claimed yet. Only reverts if Venice cooldown is still active.
      */
     function completeRedeem() external override {
         RedemptionRequest storage req = _redemptionRequests[msg.sender];
@@ -228,8 +243,16 @@ contract csDIEM is ERC4626, IcsDIEM {
             "csDIEM: withdrawal delay not met"
         );
 
+        // Auto-claim from Venice if matured but not yet claimed
         uint256 liquid = IERC20(asset()).balanceOf(address(this));
-        require(liquid >= assets, "csDIEM: claim from Venice first");
+        if (liquid < assets) {
+            (,, uint256 pending) = diemStaking.stakedInfos(address(this));
+            if (pending > 0) {
+                diemStaking.unstake();
+                liquid = IERC20(asset()).balanceOf(address(this));
+            }
+        }
+        require(liquid >= assets, "csDIEM: Venice cooldown not finished");
 
         // Effects
         req.assets = 0;
@@ -240,6 +263,29 @@ contract csDIEM is ERC4626, IcsDIEM {
         IERC20(asset()).safeTransfer(msg.sender, assets);
 
         emit RedemptionCompleted(msg.sender, assets);
+    }
+
+    /**
+     * @notice Cancel a pending redemption. Mints new shares at current rate.
+     * @dev Re-mints shares for the pending DIEM amount at the current exchange
+     *      rate. The user may receive fewer shares than they originally burned
+     *      if the share price increased since their request (due to donations).
+     */
+    function cancelRedeem() external override {
+        RedemptionRequest storage req = _redemptionRequests[msg.sender];
+        uint256 assets = req.assets;
+        require(assets > 0, "csDIEM: no pending redemption");
+
+        // Effects
+        req.assets = 0;
+        req.requestedAt = 0;
+        totalPendingRedemptions -= assets;
+
+        // Re-mint shares at current exchange rate
+        uint256 shares = previewDeposit(assets);
+        _mint(msg.sender, shares);
+
+        emit RedemptionCancelled(msg.sender, assets, shares);
     }
 
     // ── Permissionless ──────────────────────────────────────────────────
@@ -281,25 +327,34 @@ contract csDIEM is ERC4626, IcsDIEM {
 
     /**
      * @notice Batch-send accumulated redemption amounts to Venice. Anyone can call.
-     * @dev Calls diemStaking.initiateUnstake() once for all pending amounts
-     *      that haven't been sent yet. Minimizes cooldown resets compared to
-     *      calling initiateUnstake() on every individual redemption request.
-     *
-     *      Guarded: reverts if Venice cooldown is active to prevent griefing.
-     *      Without this check, an attacker could cycle 1-DIEM requestRedeem +
-     *      initiateVeniceUnstake to permanently reset the cooldown for ALL
-     *      pending amounts, blocking legitimate redemptions indefinitely.
+     * @dev Claims matured cooldown first (M-01 fix) to prevent re-locking.
+     *      Reverts if Venice cooldown is still active or nothing to initiate.
      */
     function initiateVeniceUnstake() external override {
-        uint256 amount = totalPendingNotInitiated;
-        require(amount > 0, "csDIEM: nothing to initiate");
+        require(totalPendingNotInitiated > 0, "csDIEM: nothing to initiate");
+        _tryInitiateVeniceUnstake();
+    }
 
-        // Guard: prevent cooldown reset griefing
+    /**
+     * @dev Internal: attempt to initiate Venice unstake for all pending amounts.
+     *      - If matured pending exists, claims it first (M-01 fix).
+     *      - If cooldown is active, silently returns (no revert for auto-calls).
+     */
+    function _tryInitiateVeniceUnstake() internal {
+        uint256 amount = totalPendingNotInitiated;
+        if (amount == 0) return;
+
         (, uint256 cooldownEnd, uint256 pending) = diemStaking.stakedInfos(address(this));
-        require(
-            pending == 0 || block.timestamp >= cooldownEnd,
-            "csDIEM: Venice cooldown active"
-        );
+
+        if (pending > 0) {
+            if (block.timestamp >= cooldownEnd) {
+                // M-01 fix: claim matured cooldown before initiating new one
+                diemStaking.unstake();
+            } else {
+                // Cooldown still active — can't initiate, return silently
+                return;
+            }
+        }
 
         // Effects
         totalPendingNotInitiated = 0;
