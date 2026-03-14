@@ -441,7 +441,7 @@ contract csDIEMTest is Test {
 
     // ── Cancel Redeem ───────────────────────────────────────────────────
 
-    function test_cancelRedeem_reMintShares() public {
+    function test_cancelRedeem_reMintSharesSoleStaker() public {
         vm.prank(alice);
         vault.deposit(DEPOSIT_AMOUNT, alice);
 
@@ -454,12 +454,12 @@ contract csDIEMTest is Test {
         vm.prank(alice);
         vault.cancelRedeem();
 
-        // Should get exact same shares back (stored in request)
+        // Sole staker: totalSupply was 0, so stored shares are used
         assertEq(vault.balanceOf(alice), sharesBefore);
         assertEq(vault.totalPendingRedemptions(), 0);
     }
 
-    function test_cancelRedeem_sameSharesAfterHarvest() public {
+    function test_cancelRedeem_fewerSharesAfterHarvest() public {
         diem.setCooldownDuration(0);
 
         vm.prank(alice);
@@ -481,9 +481,9 @@ contract csDIEMTest is Test {
         vm.prank(alice);
         vault.cancelRedeem();
 
-        // Same shares re-minted (stored exact count), now worth more due to harvest
-        assertEq(vault.balanceOf(alice), aliceSharesBefore);
-        assertGt(vault.convertToAssets(aliceSharesBefore), DEPOSIT_AMOUNT);
+        // Fewer shares re-minted because share price increased (anti-arbitrage fix)
+        uint256 sharesAfter = vault.balanceOf(alice);
+        assertLt(sharesAfter, aliceSharesBefore);
     }
 
     function test_cancelRedeem_revertsNoRequest() public {
@@ -500,7 +500,7 @@ contract csDIEMTest is Test {
         vm.prank(alice);
         uint256 assets = vault.requestRedeem(shares);
 
-        // cancelRedeem re-mints the exact shares that were burned
+        // Sole staker → totalSupply == 0 → stored shares used
         vm.expectEmit(true, false, false, true);
         emit IcsDIEM.RedemptionCancelled(alice, assets, shares);
 
@@ -512,8 +512,9 @@ contract csDIEMTest is Test {
 
     function test_concurrentRedemptions_noDeadlock() public {
         // Alice and Bob both deposit and redeem at different times.
-        // The second redemption's Venice unstake is blocked by cooldown.
-        // With partial sDIEM withdrawals, Alice isn't blocked by Bob.
+        // With the timer-reset fix, _tryWithdrawFromSdiem skips if
+        // an sDIEM withdrawal is already pending. After Alice completes,
+        // syncWithdrawals() initiates Bob's portion.
         vm.prank(alice);
         vault.deposit(DEPOSIT_AMOUNT, alice);
         vm.prank(bob);
@@ -524,22 +525,23 @@ contract csDIEMTest is Test {
         vm.prank(alice);
         vault.requestRedeem(aliceShares);
 
-        // Bob redeems 1 hour later — Venice cooldown is active
+        // Bob redeems 1 hour later — sDIEM withdrawal already pending, skipped
         vm.warp(block.timestamp + 1 hours);
         uint256 bobShares = vault.balanceOf(bob);
         vm.prank(bob);
         vault.requestRedeem(bobShares);
 
-        // Wait for 24h delay (from Alice's request time)
+        // Wait for 24h delay (from Bob's request time, which reset the timer)
         vm.warp(block.timestamp + 24 hours);
 
-        // Alice completes — partial sDIEM withdrawal gives her portion.
-        // sDIEM auto-initiates Venice unstake for Bob's portion.
+        // Alice completes — partial sDIEM withdrawal gives her portion
         uint256 aliceDiemBefore = diem.balanceOf(alice);
         vm.prank(alice);
         vault.completeRedeem();
+        assertGt(diem.balanceOf(alice), aliceDiemBefore);
 
-        assertGt(diem.balanceOf(alice), aliceDiemBefore); // Alice got her DIEM
+        // Sync to initiate sDIEM withdrawal for Bob's portion (now no pending)
+        vault.syncWithdrawals();
 
         // Bob waits for second Venice cooldown
         vm.warp(block.timestamp + 24 hours);
@@ -547,8 +549,7 @@ contract csDIEMTest is Test {
         uint256 bobDiemBefore = diem.balanceOf(bob);
         vm.prank(bob);
         vault.completeRedeem();
-
-        assertGt(diem.balanceOf(bob), bobDiemBefore); // Bob got his DIEM
+        assertGt(diem.balanceOf(bob), bobDiemBefore);
 
         // All redemptions cleared
         assertEq(vault.totalPendingRedemptions(), 0);
@@ -801,12 +802,12 @@ contract csDIEMTest is Test {
         vm.prank(bob);
         vault.deposit(DEPOSIT_AMOUNT, bob);
 
-        // Alice requests redeem
+        // Alice requests redeem — auto-initiates sDIEM withdrawal
         uint256 aliceShares = vault.balanceOf(alice);
         vm.prank(alice);
         uint256 aliceAssets = vault.requestRedeem(aliceShares);
 
-        // Bob requests redeem
+        // Bob requests redeem — sDIEM withdrawal already pending, skipped
         uint256 bobShares = vault.balanceOf(bob);
         vm.prank(bob);
         uint256 bobAssets = vault.requestRedeem(bobShares);
@@ -819,7 +820,13 @@ contract csDIEMTest is Test {
         vm.prank(alice);
         vault.completeRedeem();
 
-        // Bob completes (may use liquid DIEM already claimed)
+        // Sync to initiate withdrawal for Bob's portion
+        vault.syncWithdrawals();
+
+        // Wait for Bob's sDIEM withdrawal delay
+        vm.warp(block.timestamp + 24 hours);
+
+        // Bob completes
         vm.prank(bob);
         vault.completeRedeem();
 

@@ -20,8 +20,10 @@ import {OracleLibrary} from "./libraries/OracleLibrary.sol";
  * Share price increases monotonically as harvested DIEM compounds.
  *
  * sDIEM is the base layer (stake DIEM, earn USDC).
- * csDIEM is the composability layer — standard ERC-4626 with increasing
- * exchange rate, compatible with Pendle, Morpho, Silo, etc.
+ * csDIEM is the composability layer — ERC-4626 with increasing exchange rate.
+ * NOTE: Standard withdraw()/redeem() are disabled (return 0 via maxWithdraw/
+ * maxRedeem). Integrations expecting standard ERC-4626 withdrawal flow
+ * (Pendle, Morpho, Silo) must use the async requestRedeem/completeRedeem path.
  *
  * Redemptions use a request/complete pattern with a 24h delay,
  * matching sDIEM's withdrawal delay (which matches Venice's cooldown).
@@ -43,7 +45,7 @@ contract csDIEM is ERC4626, IcsDIEM, ReentrancyGuard {
     uint256 public constant override WITHDRAWAL_DELAY = 24 hours;
     uint256 public constant MIN_REDEEM_ASSETS = 1e18; // 1 DIEM minimum
     uint256 private constant BPS_DENOMINATOR = 10_000;
-    uint32 private constant MIN_TWAP_WINDOW = 300; // 5 minutes minimum
+    uint32 private constant MIN_TWAP_WINDOW = 1800; // 30 minutes minimum
     uint256 private constant SDIEM_MIN_WITHDRAW = 1e18; // sDIEM's minimum
 
     // ── Immutables ──────────────────────────────────────────────────────
@@ -271,7 +273,9 @@ contract csDIEM is ERC4626, IcsDIEM, ReentrancyGuard {
 
         emit RedemptionRequested(msg.sender, shares, assets);
 
-        // Best-effort: initiate sDIEM withdrawal for pending redemptions
+        // Best-effort: initiate sDIEM withdrawal for pending redemptions.
+        // Only if no sDIEM withdrawal is already pending (avoids resetting
+        // the 24h timer and griefing other redeemers — finding #5).
         _tryWithdrawFromSdiem();
     }
 
@@ -318,9 +322,11 @@ contract csDIEM is ERC4626, IcsDIEM, ReentrancyGuard {
     }
 
     /**
-     * @notice Cancel a pending redemption. Mints new shares at current rate.
+     * @notice Cancel a pending redemption. Mints new shares at CURRENT rate.
      * @dev The user may receive fewer shares than originally burned if the
      *      share price increased since their request (due to harvests).
+     *      This prevents arbitrage: request before harvest, cancel after,
+     *      and extract value from other stakers via a transient price spike.
      *      Does NOT cancel the sDIEM withdrawal — excess DIEM will be
      *      restaked via redeployExcess() after sDIEM withdrawal completes.
      *      Always allowed, even when paused.
@@ -328,7 +334,7 @@ contract csDIEM is ERC4626, IcsDIEM, ReentrancyGuard {
     function cancelRedeem() external override nonReentrant {
         RedemptionRequest storage req = _redemptionRequests[msg.sender];
         uint256 assets = req.assets;
-        uint256 shares = req.shares;
+        uint256 storedShares = req.shares;
         require(assets > 0, "csDIEM: no pending redemption");
 
         // Effects
@@ -337,13 +343,20 @@ contract csDIEM is ERC4626, IcsDIEM, ReentrancyGuard {
         req.requestedAt = 0;
         totalPendingRedemptions -= assets;
 
-        // Re-mint the exact shares that were burned.
-        // Using stored shares instead of previewDeposit avoids the ERC-4626
-        // virtual shares edge case when totalSupply == 0 (which would give
-        // the user far fewer shares than they originally had).
-        _mint(msg.sender, shares);
+        // Re-mint shares: use current rate to prevent arbitrage, EXCEPT when
+        // totalSupply == 0 (last/only staker), where previewDeposit uses the
+        // virtual shares offset and would return far fewer shares. When there
+        // are no other stakers, no arbitrage is possible anyway.
+        uint256 newShares;
+        if (totalSupply() == 0) {
+            newShares = storedShares;
+        } else {
+            newShares = previewDeposit(assets);
+        }
+        require(newShares > 0, "csDIEM: zero shares on cancel");
+        _mint(msg.sender, newShares);
 
-        emit RedemptionCancelled(msg.sender, assets, shares);
+        emit RedemptionCancelled(msg.sender, assets, newShares);
     }
 
     // ── Permissionless ──────────────────────────────────────────────────
@@ -391,6 +404,11 @@ contract csDIEM is ERC4626, IcsDIEM, ReentrancyGuard {
         (uint256 sdiemPending,) = sdiem.withdrawalRequests(address(this));
         uint256 covered = liquid + sdiemPending;
         if (covered >= needed) return;
+
+        // Don't initiate a new sDIEM withdrawal if one is already pending.
+        // Calling sdiem.requestWithdraw() would reset the 24h timer for ALL
+        // csDIEM redeemers, enabling griefing via repeated requestRedeem calls.
+        if (sdiemPending > 0) return;
 
         uint256 deficit = needed - covered;
         uint256 sdiemBal = sdiem.balanceOf(address(this));
