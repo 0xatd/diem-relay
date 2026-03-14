@@ -48,6 +48,7 @@ contract csDIEM is ERC4626, IcsDIEM {
     // ── Constants ────────────────────────────────────────────────────────
 
     uint256 public constant override WITHDRAWAL_DELAY = 24 hours;
+    uint256 public constant MIN_REDEEM_ASSETS = 1e18; // 1 DIEM minimum redemption
 
     // ── Immutables ──────────────────────────────────────────────────────
 
@@ -201,7 +202,8 @@ contract csDIEM is ERC4626, IcsDIEM {
      * @dev Burns shares at current exchange rate, records DIEM amount owed.
      *      Initiates Venice unstake for the DIEM amount.
      *      If user has an existing pending redemption, amounts accumulate
-     *      and the timer resets.
+     *      without resetting the timer (preserves original delay).
+     *      Minimum redemption: 1 DIEM (prevents dust griefing of Venice queue).
      * @param shares Number of csDIEM shares to redeem.
      * @return assets DIEM amount that will be claimable after delay.
      */
@@ -211,7 +213,7 @@ contract csDIEM is ERC4626, IcsDIEM {
 
         // Calculate DIEM owed at current exchange rate BEFORE burning
         assets = previewRedeem(shares);
-        require(assets > 0, "csDIEM: zero assets");
+        require(assets >= MIN_REDEEM_ASSETS, "csDIEM: below minimum redeem");
 
         // Effects — burn shares
         _burn(msg.sender, shares);
@@ -219,7 +221,10 @@ contract csDIEM is ERC4626, IcsDIEM {
         // Track pending redemption
         RedemptionRequest storage req = _redemptionRequests[msg.sender];
         req.assets += assets;
-        req.requestedAt = block.timestamp;
+        // Only set timer on first request — accumulating doesn't reset delay
+        if (req.requestedAt == 0) {
+            req.requestedAt = block.timestamp;
+        }
         totalPendingRedemptions += assets;
         totalPendingNotInitiated += assets;
 
@@ -280,6 +285,12 @@ contract csDIEM is ERC4626, IcsDIEM {
         req.assets = 0;
         req.requestedAt = 0;
         totalPendingRedemptions -= assets;
+        // Fix: decrement pending-not-initiated to prevent phantom Venice unstakes
+        if (totalPendingNotInitiated >= assets) {
+            totalPendingNotInitiated -= assets;
+        } else {
+            totalPendingNotInitiated = 0;
+        }
 
         // Re-mint shares at current exchange rate
         uint256 shares = previewDeposit(assets);
@@ -330,7 +341,7 @@ contract csDIEM is ERC4626, IcsDIEM {
      * @dev Claims matured cooldown first (M-01 fix) to prevent re-locking.
      *      Reverts if Venice cooldown is still active or nothing to initiate.
      */
-    function initiateVeniceUnstake() external override {
+    function initiateVeniceUnstake() external override onlyAdmin {
         require(totalPendingNotInitiated > 0, "csDIEM: nothing to initiate");
         _tryInitiateVeniceUnstake();
     }
@@ -344,7 +355,7 @@ contract csDIEM is ERC4626, IcsDIEM {
         uint256 amount = totalPendingNotInitiated;
         if (amount == 0) return;
 
-        (, uint256 cooldownEnd, uint256 pending) = diemStaking.stakedInfos(address(this));
+        (uint256 staked, uint256 cooldownEnd, uint256 pending) = diemStaking.stakedInfos(address(this));
 
         if (pending > 0) {
             if (block.timestamp >= cooldownEnd) {
@@ -356,8 +367,15 @@ contract csDIEM is ERC4626, IcsDIEM {
             }
         }
 
+        // Cap to what's actually staked to prevent phantom unstakes
+        // (totalPendingNotInitiated can be inflated by cancel/complete flows)
+        if (amount > staked) {
+            amount = staked;
+        }
+
         // Effects
         totalPendingNotInitiated = 0;
+        if (amount == 0) return;
         emit VeniceUnstakeInitiated(msg.sender, amount);
 
         // Interaction

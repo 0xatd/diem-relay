@@ -215,14 +215,15 @@ contract csDIEMTest is Test {
         vm.prank(alice);
         uint256 assets1 = vault.requestRedeem(firstBatch);
 
-        // Second request — accumulates, resets timer
+        // Second request — accumulates, preserves original timer
+        uint256 originalRequestedAt = block.timestamp;
         vm.warp(block.timestamp + 12 hours);
         vm.prank(alice);
         uint256 assets2 = vault.requestRedeem(secondBatch);
 
         (uint256 pendingAssets, uint256 requestedAt) = vault.redemptionRequests(alice);
         assertEq(pendingAssets, assets1 + assets2);
-        assertEq(requestedAt, block.timestamp); // Timer reset
+        assertEq(requestedAt, originalRequestedAt); // Timer NOT reset
     }
 
     function test_requestRedeem_allowedWhenPaused() public {
@@ -843,6 +844,7 @@ contract csDIEMTest is Test {
         vault.completeRedeem();
 
         // Bob's portion was never initiated on Venice — initiate now
+        vm.prank(admin);
         vault.initiateVeniceUnstake();
 
         // Wait for Bob's Venice cooldown
@@ -860,7 +862,7 @@ contract csDIEMTest is Test {
     // ── Fuzz tests ─────────────────────────────────────────────────────
 
     function testFuzz_depositRedeemRoundTrip(uint256 amount) public {
-        amount = bound(amount, 1, INITIAL_BALANCE);
+        amount = bound(amount, 1e18, INITIAL_BALANCE); // Min 1 DIEM (MIN_REDEEM_ASSETS)
 
         vm.prank(alice);
         uint256 shares = vault.deposit(amount, alice);
