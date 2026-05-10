@@ -35,10 +35,11 @@ import { calcSDiemApr } from "@/lib/apr";
 
 const CSDIEM_TOOLTIP = (
   <>
-    <strong className="text-accent">csDIEM</strong> auto-compounds your yield:
-    instead of receiving USDC, your stake earns <em>more DIEM</em> over time as
-    rewards are harvested and re-staked. Same 24h withdrawal delay applies; exit
-    uses request → wait → complete.
+    <strong className="text-accent">csDIEM</strong> is the DeFi wrapper for
+    sDIEM — a transferable ERC-4626 share whose price grows as USDC rewards
+    are harvested and re-staked into DIEM. Unlike sDIEM (non-transferable),
+    csDIEM is usable as ERC-20 collateral, in LPs, and across DeFi. Same 24h
+    exit (request → wait → complete).
   </>
 );
 
@@ -166,7 +167,7 @@ export function SDiemCard() {
               className="h-3.5 w-3.5 cursor-pointer accent-accent disabled:cursor-not-allowed"
             />
             <span>
-              Auto-compound yield in DIEM (csDIEM)
+              Mint csDIEM instead — auto-compound + DeFi-composable
             </span>
             <Tooltip content={CSDIEM_TOOLTIP}>
               <span className="text-[10px]">ⓘ</span>
@@ -298,6 +299,13 @@ export function SDiemCard() {
       <div className="space-y-3">
         {csdiem.paused && <PausedBanner />}
 
+        <p className="text-xs leading-relaxed text-gray-400">
+          <strong className="text-accent">csDIEM</strong> is the DeFi wrapper
+          for sDIEM — a transferable ERC-4626 share that auto-compounds USDC
+          rewards into DIEM. Use it as ERC-20 collateral, in LPs, or anywhere
+          across DeFi.
+        </p>
+
         <StatRow
           label="Your csDIEM"
           value={`${formatDiem(csdiem.userShares)} csDIEM`}
@@ -349,6 +357,10 @@ export function SDiemCard() {
 
         <div className="space-y-2 rounded-lg border border-border bg-card-inner p-3">
           <p className="text-xs font-medium text-gray-300">Wrap DIEM → csDIEM</p>
+          <p className="text-[11px] leading-relaxed text-gray-500">
+            Already staking in sDIEM? Withdraw it first (24h delay), then wrap
+            the resulting DIEM here.
+          </p>
           <AmountInput
             value={wrapAmt}
             onChange={setWrapAmt}
