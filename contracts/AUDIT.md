@@ -63,6 +63,8 @@
 | `DIEMVault.sol` | 176 | ReentrancyGuard | Deposit-only, reserve segregation |
 | `RevenueSplitter.sol` | 161 | ReentrancyGuard | Permissionless 20/80 splitter, immutable USDC + sDIEM, non-rug USDC rescue, 2-step admin |
 | `csDIEM.sol` | 556 | OZ ERC4626 + ReentrancyGuard | Auto-compounding wrapper over sDIEM. Standard withdraw/redeem disabled (revert in `_withdraw`); exits via async `requestRedeem → 24h → completeRedeem`. Permissionless `harvest(deadline)` claims sDIEM rewards, swaps USDC→DIEM via Slipstream `exactInputSingle` with TWAP-protected slippage + mandatory absolute floor + 1e6 virtual-shares offset. |
+| `sDIEMv2.sol` *(pending deploy)* | 578 | OZ ERC20Permit + ReentrancyGuard + IERC1271 | ERC-20 + EIP-2612 transferable Synthetix staker. Reward checkpoint hooked into OZ v5 `_update(from,to,value)` so transfers cannot leak rewards (Synthetix-ERC20 trap). Per-address withdrawal queue does NOT transfer with sDIEM. All v1 audit fixes carried over (M-01 stale-cooldown claim, M-02 ordering, L-01 dust refund); CEI ordering corrected in `stake()` (pull-then-mint). |
+| `csDIEMv2.sol` *(pending deploy)* | 391 | OZ ERC4626 + ReentrancyGuard | Canonical 4626 wrapper over sDIEM v2 (asset = sDIEM v2, not DIEM). Standard synchronous `redeem`; `maxRedeem == balanceOf` (the v1→v2 composability fix). `maxDeposit`/`maxMint` return 0 when paused (EIP-4626 §3.1; required for Morpho integration). `_deposit`/`_withdraw` guarded by `nonReentrant` against router-mediated reentry during harvest. `depositDIEM` zap for raw-DIEM holders. All three Pashov fixes preserved verbatim. |
 
 ## 3. Trust Assumptions
 
@@ -119,6 +121,15 @@ The admin **cannot**:
 - Rescue USDC — blocked by `require(token != address(USDC))` in `rescueToken()`
 - Change the 20/80 split — ratios are constants (redeploy required to change)
 - Bypass `distribute()` to access customer USDC directly
+
+### sDIEMv2 / csDIEMv2 Trust (pending deploy)
+
+Trust assumptions for v2 are a strict superset of v1's, with these deltas:
+
+- **sDIEMv2 admin** has the same powers as v1 sDIEM admin (pause/unpause, set operator, two-step transfer, recover non-DIEM/non-USDC tokens). The ERC-20 + EIP-2612 surface adds no new admin privileges. Permit signing is decentralized — anyone can sign on their own behalf.
+- **csDIEMv2 admin** has the same powers as v1 csDIEM admin (rotate swapRouter/oraclePool, tune slippage/TWAP/floor/minHarvest, pause, two-step transfer, recover non-DIEM/non-USDC/non-sDIEM tokens). New: `recoverERC20` also blocks the asset itself (sDIEM v2).
+- **Pause semantics formalized to EIP-4626**: when paused, `maxDeposit(u)` and `maxMint(u)` both return 0 (spec-required so integrators don't see a "deposit-open" signal then hit a revert). Redemptions remain allowed when paused — `_withdraw` is never gated.
+- **No new external dependencies**: csDIEMv2 uses the same Slipstream router + oracle pool + Venice integration as v1.
 
 ### csDIEM Trust
 

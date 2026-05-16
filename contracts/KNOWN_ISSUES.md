@@ -187,6 +187,49 @@ to zero.
 
 ---
 
+### K-10: sDIEM v2 — Internal Adversarial Pass Coverage (Informational)
+
+**Description**: `sDIEMv2.sol` and `csDIEMv2.sol` (the `sdiem-v2` branch, pending deploy) are the ERC-20 + canonical-4626 successors to sDIEM and csDIEM. They have not been covered by an external audit. The codebase was put through **four independent adversarial review passes** in-house (one initial sweep + three parallel specialists: composability for Pendle/Morpho/Spectra/Silo, economic griefing/MEV, and cross-contract / Venice edge cases).
+
+**Critical findings + remediations**:
+
+- **CRITICAL [csDIEMv2] — `maxDeposit`/`maxMint` not overridden for pause (REMEDIATED)**: EIP-4626 §3.1 requires `maxDeposit()` to return 0 when `deposit()` would revert. Without the override, Morpho/MetaMorpho integrators reading `maxDeposit=type(uint256).max` while paused would hit a hard revert on the actual deposit. Fixed by overriding both to return 0 when paused. Test: `test_maxDepositZeroWhenPaused`.
+- **HIGH [sDIEMv2] — CEI violation in `stake()` (REMEDIATED)**: `_mint` ran before `diem.safeTransferFrom`. Not exploitable today (atomic revert + `nonReentrant` + DIEM is a plain ERC-20 with no hooks) but a structural correctness failure that would become exploitable if DIEM ever gained receive-hooks. Fixed by reordering to pull-then-mint.
+- **HIGH [csDIEMv2] — `_deposit`/`_withdraw` lack `nonReentrant` (REMEDIATED)**: During `harvest()`, the admin-set `swapRouter` controls execution. A malicious router could reenter `deposit()` mid-harvest to mint shares at pre-harvest price, then redeem post-harvest for an unearned subsidy. Fixed by adding `nonReentrant` to both internal hooks (covers `deposit`, `mint`, `withdraw`, `redeem`).
+- **MEDIUM [sDIEMv2] — `claimFromVenice` missing cooldown guard (REMEDIATED)**: Venice's `unstake()` reverts with a raw error if the cooldown isn't met. Added explicit `require(block.timestamp >= cooldownEnd, "sDIEMv2: cooldown not yet expired")` for a clearer revert. Test: `test_claimFromVeniceRevertsBeforeCooldown`.
+- **DEPLOY HARDENING [csDIEMv2] — Oracle pool cardinality probe (ADDED)**: Slipstream pools initialize with `observationCardinality = 1`; deploying against an under-bumped pool would brick `harvest()` until cardinality is raised and the TWAP window fills. The v2 deploy script now calls `OracleLibrary.consult(oraclePool, twapWindow)` as a pre-broadcast assertion — fails fast if the pool isn't ready.
+
+**Findings explicitly dismissed on re-trace** (catalogued so they don't resurface in future audits):
+
+- **Venice cooldown reset grief via `requestWithdraw`+`cancelWithdraw` loop** (claimed High): re-traced — matured Venice DIEM is claimed-to-liquid by the griefer's own tx and pays the original requester immediately on their `completeWithdraw`. The griefer's tiny new initiate only delays the griefer's own withdrawal. Not exploitable.
+- **`requestedAt` always overwritten** (claimed griefable): documented v1 behavior preserved intentionally — without it, users could top up a 1-wei add just before completion to extract more. Self-grief is the intended trade-off.
+- **Venice cooldown hardcoded at 24h while Venice's `cooldownDuration` is mutable** (claimed High): funds-safe failure mode (user waits longer than the sDIEM doc promises but does not lose funds; `cancelWithdraw` is always available). Doc-level note only.
+- **Harvest MEV sandwich**: proportional gain — sandwicher earns the same per-unit return as any holder, not theft from existing holders. Standard ERC-4626 behavior.
+- **First-depositor inflation attack**: quantified safe — with `_decimalsOffset() = 6`, attacker needs to donate ≥2e6× the victim's deposit to harm by 1 wei. Not economically rational.
+- **Post-bootstrap donation**: irrational for the attacker (the donation goes to all holders proportionally).
+- **EIP-2612 permit cross-version replay**: different contract address → different EIP-712 domain separator. Blocked by construction.
+
+**Property verifications** (verified across the four reviews):
+- `_update` reward checkpoint hook fires on mint, burn, and transfer with old balances + old totalSupply captured before `super._update`. No Synthetix-ERC20 reward leak.
+- `totalAssets() == sdiem.balanceOf(csDIEMv2)` as a single line — no shadow accounting.
+- `convertToAssets(1e24)` returns `1e18` cleanly when `totalSupply == 0` (Spectra-safe).
+- `previewRedeem` never reverts for sane share counts.
+- `depositDIEM` zap math is algebraically equivalent to canonical `deposit()` (preserves inflation-attack protection).
+- `recoverERC20` blacklist enforced for `asset()` (sDIEM), DIEM, and USDC.
+
+**Validation**:
+- 271 unit/fuzz/invariant tests green
+- 16 v2 invariant properties × 102,400 fuzzed calls (8 sDIEMv2 + 8 csDIEMv2)
+- 5 Base mainnet **fork tests** green (real DIEM, real Slipstream TWAP + swap, real Venice cooldown, real maxDeposit-while-paused)
+- Slither pass: zero new actionable findings beyond v1's accepted patterns
+
+**Why K-10 is informational, not a blocker**:
+- All Critical/High findings landed fixes with tests
+- The fork tests prove the contracts work against live infrastructure
+- No external Pashov AI deep pass yet — recommended before mainnet deploy if TVL is meaningful
+
+---
+
 ## Out of Scope
 
 | Item | Reason |
@@ -236,3 +279,28 @@ to zero.
 5. `harvest()` reverts when `minDiemPerUsdc == 0` (mandatory floor enforced post-Pashov #3)
 6. After successful `harvest()`, `usdc.balanceOf(csDIEM) == 0` (all claimed USDC swapped + restaked)
 7. `recoverERC20()` always reverts for `DIEM` (underlying) and `USDC` (harvest intermediate)
+
+### sDIEMv2 (pending deploy)
+
+1. `Σ balanceOf(u) == totalSupply()` (ERC-20 consistency)
+2. `totalStaked() == totalSupply()` (semantic alias preserved for v1 compatibility)
+3. `venice.staked + venice.pending + diem.balanceOf(sDIEMv2) == totalSupply() + totalPendingWithdrawals` (DIEM conservation)
+4. `Σ historicalClaimedUSDC ≤ Σ historicalNotifiedUSDC` (no rewards minted from thin air)
+5. `usdc.balanceOf(sDIEMv2) ≥ Σ earned(u)` (reward solvency, within rounding tolerance)
+6. `rewardPerToken()` monotonically non-decreasing
+7. `totalPendingNotInitiated() ≤ totalPendingWithdrawals` (counter never inflated)
+8. `earned()` never underflows for any address (Synthetix-ERC20 trap absent)
+9. **For any (from, to, amount): `earned(from) + earned(to)` before transfer ≈ after transfer** (transfer preserves reward accruals, within 2-wei rounding)
+10. Withdrawal queue is per-address: transferring sDIEM does not move queued amounts
+
+### csDIEMv2 (pending deploy)
+
+1. `totalAssets() == sdiem.balanceOf(csDIEMv2)` (single-line accounting — no bookkeeping drift possible)
+2. `totalSupply() > 0 ⇒ totalAssets() > 0` (no shares without backing assets)
+3. `convertToAssets(1e24)` monotonically non-decreasing (Spectra-safe; share price never regresses)
+4. **`maxRedeem(u) == balanceOf(u)`** (the v1→v2 composability fix; integrators see real values)
+5. `maxWithdraw(u) == previewRedeem(balanceOf(u))`
+6. `convertToAssets ∘ convertToShares` round-trips within rounding (≤ 1e-5 of input)
+7. **Pause does NOT block redemption**: `_withdraw` is never gated; `maxRedeem` unaffected by pause state
+8. **Pause DOES block deposits**: `maxDeposit(u) == 0 ⇔ paused == true` (EIP-4626 §3.1)
+9. `recoverERC20` blacklist: `asset()` (sDIEM v2), DIEM, and USDC are all non-recoverable
