@@ -303,6 +303,24 @@ contract sDIEMv2Test is Test {
         assertEq(pending, 100e18);
     }
 
+    // ── claimFromVenice cooldown guard ──────────────────────────────────
+
+    function test_claimFromVeniceRevertsBeforeCooldown() public {
+        // Set a non-zero cooldown so Venice actually has a wait window.
+        diemToken.setCooldownDuration(24 hours);
+
+        vm.prank(alice);
+        staking.stake(100e18);
+
+        // requestWithdraw triggers initiateUnstake; cooldown is active.
+        vm.prank(alice);
+        staking.requestWithdraw(50e18);
+
+        // Cooldown is still active.
+        vm.expectRevert(bytes("sDIEMv2: cooldown not yet expired"));
+        staking.claimFromVenice();
+    }
+
     // ── Two-step admin ──────────────────────────────────────────────────
 
     function test_twoStepAdmin() public {

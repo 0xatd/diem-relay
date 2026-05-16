@@ -207,16 +207,35 @@ contract csDIEMv2Test is Test {
         vm.prank(admin);
         vault.pause();
 
+        // deposit() reverts via OZ ERC4626ExceededMaxDeposit (because
+        // maxDeposit returns 0 when paused — the EIP-4626-correct behavior).
+        // The exact selector is not load-bearing; what matters is that the
+        // call reverts.
         vm.prank(alice);
-        vm.expectRevert(bytes("csDIEMv2: paused"));
+        vm.expectRevert();
         vault.deposit(50e18, alice);
 
+        // depositDIEM still trips the whenNotPaused modifier directly.
         vm.prank(alice);
         vm.expectRevert(bytes("csDIEMv2: paused"));
         vault.depositDIEM(50e18, alice);
 
         vm.expectRevert(bytes("csDIEMv2: paused"));
         vault.harvest(block.timestamp + 300);
+    }
+
+    function test_maxDepositZeroWhenPaused() public {
+        // EIP-4626 §3.1 — maxDeposit must return 0 if deposit would revert.
+        // Headline composability fix: Morpho/MetaMorpho reads maxDeposit
+        // before calling deposit; if it returned uint256.max while paused,
+        // Morpho would hit a hard revert.
+        assertEq(vault.maxDeposit(alice), type(uint256).max, "open vault should report max");
+
+        vm.prank(admin);
+        vault.pause();
+
+        assertEq(vault.maxDeposit(alice), 0, "paused maxDeposit must be 0");
+        assertEq(vault.maxMint(alice), 0, "paused maxMint must be 0");
     }
 
     function test_pauseDoesNotBlockRedeem() public {

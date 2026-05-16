@@ -400,8 +400,10 @@ contract sDIEMv2 is IsDIEMv2, ERC20Permit, ReentrancyGuard {
     // ── Permissionless — Venice management ──────────────────────────────
 
     function claimFromVenice() external override nonReentrant {
-        (,, uint256 pending) = diemStaking.stakedInfos(address(this));
+        (, uint256 cooldownEnd, uint256 pending) = diemStaking.stakedInfos(address(this));
         require(pending > 0, "sDIEMv2: nothing pending on Venice");
+        // Explicit guard for a cleaner error than the raw Venice revert.
+        require(block.timestamp >= cooldownEnd, "sDIEMv2: cooldown not yet expired");
 
         uint256 balBefore = diem.balanceOf(address(this));
         diemStaking.unstake();

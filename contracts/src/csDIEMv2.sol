@@ -135,19 +135,49 @@ contract csDIEMv2 is ERC4626, IcsDIEMv2, ReentrancyGuard {
         return sdiem.balanceOf(address(this));
     }
 
-    /// @dev Gate deposits behind pause. No internal staking — the user
-    ///      arrives with sDIEM already in hand.
+    /// @notice Disable deposits when paused (EIP-4626 §3.1: maxDeposit must
+    ///         return 0 if deposit() would revert for any reason).
+    /// @dev Without this override, integrators (Morpho/MetaMorpho) reading
+    ///      maxDeposit before depositing would see `type(uint256).max` while
+    ///      paused, then hit a hard revert on the actual deposit call.
+    function maxDeposit(address) public view override(ERC4626, IERC4626) returns (uint256) {
+        return paused ? 0 : type(uint256).max;
+    }
+
+    /// @notice Disable mints when paused (mirrors maxDeposit).
+    function maxMint(address) public view override(ERC4626, IERC4626) returns (uint256) {
+        return paused ? 0 : type(uint256).max;
+    }
+
+    /// @dev Gate deposits behind pause AND guard against reentrancy. The
+    ///      admin-settable swap router is invoked during harvest; a malicious
+    ///      or compromised router could reenter deposit() to mint shares at
+    ///      pre-harvest price, then redeem post-harvest for an unearned
+    ///      subsidy. nonReentrant on the OZ _deposit hook blocks this for
+    ///      both `deposit()` and `mint()` entry points.
     function _deposit(address caller, address receiver, uint256 assets, uint256 shares)
         internal
         override
+        nonReentrant
         whenNotPaused
     {
         super._deposit(caller, receiver, assets, shares);
     }
 
-    /// @dev `_withdraw` is intentionally NOT overridden. Standard OZ
-    ///      synchronous redeem applies; maxRedeem/maxWithdraw return real
-    ///      values; redemptions are always allowed (even when paused).
+    /// @dev Synchronous redeem (the v2 composability win). Always allowed,
+    ///      even when paused. nonReentrant here is belt-and-suspenders —
+    ///      the symmetric protection against router-mediated reentrancy
+    ///      during harvest, even though redeem is unlikely to be exploitable
+    ///      mid-harvest (totalAssets is pre-harvest, same as without harvest).
+    function _withdraw(
+        address caller,
+        address receiver,
+        address owner,
+        uint256 assets,
+        uint256 shares
+    ) internal override nonReentrant {
+        super._withdraw(caller, receiver, owner, assets, shares);
+    }
 
     /// @dev 1e6 offset for inflation-attack protection (matches csDIEM v1).
     function _decimalsOffset() internal pure override returns (uint8) {

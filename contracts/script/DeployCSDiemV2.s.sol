@@ -6,6 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {csDIEMv2} from "../src/csDIEMv2.sol";
 import {IsDIEMv2} from "../src/interfaces/IsDIEMv2.sol";
 import {ICLPool} from "../src/interfaces/ICLPool.sol";
+import {OracleLibrary} from "../src/libraries/OracleLibrary.sol";
 
 /**
  * @title DeployCSDiemV2
@@ -72,6 +73,7 @@ contract DeployCSDiemV2 is Script {
 
         _assertSdiemMatchesDiem(p.sdiem, p.diem);
         _assertOraclePoolPairs(p.oraclePool, p.diem, p.usdc, p.tickSpacing);
+        _assertOracleTwapQueryable(p.oraclePool, p.twapWindow);
 
         _logConfig(p);
 
@@ -205,5 +207,18 @@ contract DeployCSDiemV2 is Script {
             pool.tickSpacing() == expectedTickSpacing,
             "DeployCSDiemV2: oraclePool tickSpacing mismatch"
         );
+    }
+
+    /// @dev Probe the TWAP at deploy time so we catch insufficient observation
+    ///      cardinality before the first harvest reverts. Slipstream CL pools
+    ///      (Uniswap V3 forks) initialize with cardinality=1; the pool must be
+    ///      bumped via `increaseObservationCardinalityNext(N)` and given
+    ///      `twapWindow` seconds to record history. If this consult succeeds,
+    ///      the TWAP is queryable.
+    function _assertOracleTwapQueryable(address oraclePool, uint32 twapWindow) internal view {
+        // Reverts inside OracleLibrary if observation history is shorter than
+        // twapWindow. We deliberately don't try/catch — a hard fail at deploy
+        // is the right outcome.
+        OracleLibrary.consult(oraclePool, twapWindow);
     }
 }
