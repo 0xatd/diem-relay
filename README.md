@@ -4,6 +4,12 @@ Stake DIEM tokens to earn USDC yield from Venice AI compute revenue. All staked 
 
 Live at **[diem-relay.com](https://diem-relay.com)**. Deployed on **Base**. Built with Foundry (Solidity 0.8.24).
 
+## v2 (sdiem-v2 branch — pending deploy)
+
+The `sdiem-v2` branch ships **sDIEM v2** (transferable ERC-20 + EIP-2612 permit, Synthetix rewards checkpointed on every transfer) and **csDIEM v2** (canonical ERC-4626 wrapper over sDIEM v2, with synchronous standard `redeem`). The two contracts together enable composability with Pendle SY, Morpho/MetaMorpho, Spectra IBT, and Silo without bespoke adapters. The Pashov audit fixes from csDIEM v1 (caller-supplied harvest deadline, mandatory `minDiemPerUsdc` floor, `uint128` bound on the TWAP input) are carried forward verbatim.
+
+Migration story: v1 LPs exit v1 via `requestWithdraw → 24h → completeWithdraw` (or `requestRedeem → completeRedeem` for csDIEM v1) and then deposit into v2. The 24h friction is unavoidable — DIEM has to round-trip through the Venice cooldown. No on-chain migrator contract is shipped; the LP set is small enough to coordinate off-chain.
+
 ## Architecture
 
 ```
@@ -38,6 +44,8 @@ Live at **[diem-relay.com](https://diem-relay.com)**. Deployed on **Base**. Buil
 | **RevenueSplitter** | Receives USDC revenue from compute customers and splits it 20% to the platform 2/2 Safe and 80% to sDIEM stakers via `notifyRewardAmount`. Permissionless `distribute()` with a 23h cooldown and minimum-amount floor to prevent reward-stream fragmentation. |
 | **csDIEM** | ERC-4626 auto-compounding wrapper over sDIEM. Deposit DIEM → csDIEM stakes it into sDIEM → permissionless `harvest()` claims accrued USDC, swaps to DIEM via Aerodrome Slipstream CL with TWAP-protected slippage, restakes. Yield compounds in DIEM rather than streaming as USDC. Standard ERC-4626 `withdraw`/`redeem` are disabled — exits use the async `requestRedeem` → 24h delay → `completeRedeem` flow. |
 | **DIEMVault** | USDC deposit vault for the DIEM Relay service. Borrowers deposit USDC on-chain; an off-chain watcher credits relay accounts. Deposit-only (Phase 1). |
+| **sDIEM v2** *(pending deploy)* | ERC-20 + EIP-2612 permit. Same Synthetix reward model and Venice forward-staking as v1, but transferable. The reward checkpoint is hooked into the OZ v5 `_update` hook so balance changes (mint/burn/transfer) re-snapshot user accruals — preventing the Synthetix-ERC20 reward-leak trap. The 24h withdrawal queue is per-address and does **not** transfer with sDIEM. |
+| **csDIEM v2** *(pending deploy)* | Canonical ERC-4626 wrapper over sDIEM v2. `asset()` is sDIEM v2 (not DIEM). Standard sync `redeem` works; `maxRedeem`/`maxWithdraw` return real values — composable with Pendle, Morpho, Spectra, Silo. `depositDIEM` zap handles users holding raw DIEM. `recoverERC20` blocks DIEM, USDC, and sDIEM. Pause gates deposits and harvest; redemptions are always allowed. |
 
 ### Revenue Loop
 
@@ -82,13 +90,17 @@ csDIEM is a thin ERC-4626 vault layered on sDIEM. It does not interact with Veni
 contracts/
   src/
     sDIEM.sol               Stake DIEM, earn USDC (Synthetix model)
+    sDIEMv2.sol             v2: same model, ERC-20 + EIP-2612 transferable
     RevenueSplitter.sol     20/80 USDC splitter: Safe + sDIEM
     csDIEM.sol              ERC-4626 auto-compounding wrapper over sDIEM
+    csDIEMv2.sol            v2: canonical 4626 over sDIEM v2 (sync redeem)
     DIEMVault.sol           USDC deposit vault for relay credits
     interfaces/
       IsDIEM.sol            sDIEM interface
+      IsDIEMv2.sol          sDIEM v2 interface (IERC20 + IERC20Permit + IERC1271)
       IRevenueSplitter.sol  RevenueSplitter interface
       IcsDIEM.sol           csDIEM interface
+      IcsDIEMv2.sol         csDIEM v2 interface (IERC4626)
       IDIEMStaking.sol      DIEM token staking interface (Base)
       IDIEMVault.sol        DIEMVault interface
       ICLPool.sol           Aerodrome Slipstream pool (TWAP oracle source)
@@ -107,6 +119,11 @@ contracts/
     RevenueSplitterFork.t.sol  1 Base-fork integration test
     csDIEM.t.sol            56 unit/fuzz tests
     csDIEMInvariant.t.sol   5 invariant tests
+    sDIEMv2.t.sol           v2: ERC-20 + permit + checkpoint + queue semantics
+    sDIEMv2Invariant.t.sol  v2: 8 invariants incl. transfer-preserves-earned
+    csDIEMv2.t.sol          v2: standard 4626 + harvest + zap + pause-allows-redeem
+    csDIEMv2Invariant.t.sol v2: 8 invariants incl. monotonic share price
+    DiemV2Integration.t.sol v2: full DIEM → csDIEM → harvest → sDIEM → DIEM roundtrip
     mocks/                  MockDIEMStaking, MockSwapRouter, MockCLPool, MockERC20
   script/
     DeploySDiem.s.sol             sDIEM deployment
@@ -114,6 +131,8 @@ contracts/
     DeployRevenueSplitter.s.sol   RevenueSplitter deployment
     DeployCSDiem.s.sol            csDIEM deployment (hardened: pre/post asserts,
                                   setMinDiemPerUsdc + transferAdmin in single broadcast)
+    DeploySDiemV2.s.sol           sDIEM v2 deployment
+    DeployCSDiemV2.s.sol          csDIEM v2 deployment (floor is constructor arg)
 src/                        Relay server (TypeScript / Bun / Hono)
   index.ts                  Hono server: /v1/buy, /v1/chat/completions, etc.
   deposit-watcher.ts        Picks up DIEMVault Deposited events → SQLite
@@ -133,7 +152,7 @@ app/                        Staking UI (Next.js 16 / wagmi / RainbowKit / Tailwi
 cd contracts
 forge install
 forge build
-forge test            # 213 tests across 9 suites (unit, fuzz, invariant, fork)
+forge test            # 269 tests across 13 suites (unit, fuzz, invariant, fork)
 ```
 
 ## Deployment
@@ -222,9 +241,11 @@ See `contracts/AUDIT.md` and `contracts/KNOWN_ISSUES.md`.
 
 ### Test Coverage
 
-213 tests across 9 suites: unit, fuzz, invariant, and Base-fork integration tests. Key invariants verified:
+269 tests across 13 suites: unit, fuzz, invariant, and Base-fork integration tests. Key invariants verified:
 - Sum of staker balances equals `totalStaked` (sDIEM)
 - Sum of borrower balances equals `totalDeposits` (DIEMVault)
 - Share price never decreases (sDIEM, csDIEM — absent slashing)
 - csDIEM `totalAssets` accounts for all DIEM (sdiemBalance + sdiemPending + liquid − pendingRedemptions)
+- **sDIEM v2**: balance/supply consistency, DIEM conservation across Venice + liquid + queue, no over-distribution of rewards, reward solvency, monotonic `rewardPerToken`, `totalPendingNotInitiated` ≤ `totalPendingWithdrawals`, transfer preserves `earned(from) + earned(to)` (the Synthetix-ERC20 trap), `earned` never underflows
+- **csDIEM v2**: `totalAssets == sdiem.balanceOf(this)`, no shares without assets, monotonic share price, `maxRedeem == balanceOf` (4626 composability), `maxWithdraw == previewRedeem(balanceOf)`, `convertToAssets ∘ convertToShares ≈ identity`, pause does not block redemption, recovery blacklist enforced
 - RevenueSplitter conserves USDC (in == 20% Safe + 80% sDIEM, no dust stranded)

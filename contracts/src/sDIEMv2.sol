@@ -236,15 +236,27 @@ contract sDIEMv2 is IsDIEMv2, ERC20Permit, ReentrancyGuard {
     // ── Mutative — staking ──────────────────────────────────────────────
 
     /// @notice Stake DIEM. Mints sDIEM 1:1, forwards DIEM to Venice.
+    /// @dev CEI: pull DIEM FIRST, then mint, then forward. This protects
+    ///      against future DIEM token upgrades that might add receive hooks
+    ///      (ERC-777-style callbacks) — at the moment of any such callback,
+    ///      no sDIEM has been minted yet so a reentrant claim cannot inflate
+    ///      rewards. nonReentrant alone is not sufficient because indirect
+    ///      reentrancy via a hook into a different contract reading sDIEM
+    ///      balances would not be blocked.
     function stake(uint256 amount) external override nonReentrant whenNotPaused {
         require(amount > 0, "sDIEMv2: zero amount");
 
+        // Pull DIEM first. If transfer reverts, nothing else happens.
+        diem.safeTransferFrom(msg.sender, address(this), amount);
+
         // Mint triggers _update → reward checkpoint for msg.sender.
+        // _checkpointGlobal uses totalSupply (pre-mint), _checkpointUser uses
+        // balanceOf (pre-mint) — neither touches DIEM balance, so the new
+        // ordering doesn't affect reward accounting.
         _mint(msg.sender, amount);
         emit Staked(msg.sender, amount);
 
-        // Interactions — pull DIEM then forward to Venice
-        diem.safeTransferFrom(msg.sender, address(this), amount);
+        // Forward to Venice for compute credits.
         diemStaking.stake(amount);
     }
 
