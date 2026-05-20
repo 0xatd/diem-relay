@@ -4,9 +4,14 @@ Stake DIEM tokens to earn USDC yield from Venice AI compute revenue. All staked 
 
 Live at **[diem-relay.com](https://diem-relay.com)**. Deployed on **Base**. Built with Foundry (Solidity 0.8.24).
 
-## v2 (sdiem-v2 branch — pending deploy)
+## v2 (live, deployed 2026-05-21)
 
-The `sdiem-v2` branch ships **sDIEM v2** (transferable ERC-20 + EIP-2612 permit, Synthetix rewards checkpointed on every transfer) and **csDIEM v2** (canonical ERC-4626 wrapper over sDIEM v2, with synchronous standard `redeem`). The two contracts together enable composability with Pendle SY, Morpho/MetaMorpho, Spectra IBT, and Silo without bespoke adapters. The Pashov audit fixes from csDIEM v1 (caller-supplied harvest deadline, mandatory `minDiemPerUsdc` floor, `uint128` bound on the TWAP input) are carried forward verbatim.
+**sDIEM v2** (transferable ERC-20 + EIP-2612 permit, Synthetix rewards checkpointed on every transfer) and **csDIEM v2** (canonical ERC-4626 wrapper over sDIEM v2, with synchronous standard `redeem`) are live on Base. The two contracts together enable composability with Pendle SY, Morpho/MetaMorpho, Spectra IBT, and Silo without bespoke adapters. The Pashov audit fixes from csDIEM v1 (caller-supplied harvest deadline, mandatory `minDiemPerUsdc` floor, `uint128` bound on the TWAP input) are carried forward verbatim.
+
+**Live addresses (Base):**
+- sDIEM v2: [`0x8065228a8156590A8BFca30678394e9db91f80Ee`](https://basescan.org/address/0x8065228a8156590A8BFca30678394e9db91f80Ee)
+- csDIEM v2: [`0x78B8726929911044748374178CB2D417A54319e5`](https://basescan.org/address/0x78B8726929911044748374178CB2D417A54319e5)
+- Admin / operator: 2/2 Safe [`0x01Ea790410D9863A57771D992D2A72ea326DD7C9`](https://basescan.org/address/0x01Ea790410D9863A57771D992D2A72ea326DD7C9) (same as v1)
 
 Migration story: v1 LPs exit v1 via `requestWithdraw → 24h → completeWithdraw` (or `requestRedeem → completeRedeem` for csDIEM v1) and then deposit into v2. The 24h friction is unavoidable — DIEM has to round-trip through the Venice cooldown. No on-chain migrator contract is shipped; the LP set is small enough to coordinate off-chain.
 
@@ -44,8 +49,8 @@ Migration story: v1 LPs exit v1 via `requestWithdraw → 24h → completeWithdra
 | **RevenueSplitter** | Receives USDC revenue from compute customers and splits it 20% to the platform 2/2 Safe and 80% to sDIEM stakers via `notifyRewardAmount`. Permissionless `distribute()` with a 23h cooldown and minimum-amount floor to prevent reward-stream fragmentation. |
 | **csDIEM** | ERC-4626 auto-compounding wrapper over sDIEM. Deposit DIEM → csDIEM stakes it into sDIEM → permissionless `harvest()` claims accrued USDC, swaps to DIEM via Aerodrome Slipstream CL with TWAP-protected slippage, restakes. Yield compounds in DIEM rather than streaming as USDC. Standard ERC-4626 `withdraw`/`redeem` are disabled — exits use the async `requestRedeem` → 24h delay → `completeRedeem` flow. |
 | **DIEMVault** | USDC deposit vault for the DIEM Relay service. Borrowers deposit USDC on-chain; an off-chain watcher credits relay accounts. Deposit-only (Phase 1). |
-| **sDIEM v2** *(pending deploy)* | ERC-20 + EIP-2612 permit. Same Synthetix reward model and Venice forward-staking as v1, but transferable. The reward checkpoint is hooked into the OZ v5 `_update` hook so balance changes (mint/burn/transfer) re-snapshot user accruals — preventing the Synthetix-ERC20 reward-leak trap. The 24h withdrawal queue is per-address and does **not** transfer with sDIEM. |
-| **csDIEM v2** *(pending deploy)* | Canonical ERC-4626 wrapper over sDIEM v2. `asset()` is sDIEM v2 (not DIEM). Standard sync `redeem` works; `maxRedeem`/`maxWithdraw` return real values — composable with Pendle, Morpho, Spectra, Silo. `depositDIEM` zap handles users holding raw DIEM. `recoverERC20` blocks DIEM, USDC, and sDIEM. Pause gates deposits and harvest; redemptions are always allowed. |
+| **sDIEM v2** ([`0x8065…80Ee`](https://basescan.org/address/0x8065228a8156590A8BFca30678394e9db91f80Ee)) | ERC-20 + EIP-2612 permit. Same Synthetix reward model and Venice forward-staking as v1, but transferable. The reward checkpoint is hooked into the OZ v5 `_update` hook so balance changes (mint/burn/transfer) re-snapshot user accruals — preventing the Synthetix-ERC20 reward-leak trap. The 24h withdrawal queue is per-address and does **not** transfer with sDIEM. |
+| **csDIEM v2** ([`0x78B8…19e5`](https://basescan.org/address/0x78B8726929911044748374178CB2D417A54319e5)) | Canonical ERC-4626 wrapper over sDIEM v2. `asset()` is sDIEM v2 (not DIEM). Standard sync `redeem` works; `maxRedeem`/`maxWithdraw` return real values — composable with Pendle, Morpho, Spectra, Silo. `depositDIEM` zap handles users holding raw DIEM. `recoverERC20` blocks DIEM, USDC, and sDIEM. Pause gates deposits and harvest; redemptions are always allowed. |
 
 ### Revenue Loop
 

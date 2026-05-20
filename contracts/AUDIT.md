@@ -63,8 +63,8 @@
 | `DIEMVault.sol` | 176 | ReentrancyGuard | Deposit-only, reserve segregation |
 | `RevenueSplitter.sol` | 161 | ReentrancyGuard | Permissionless 20/80 splitter, immutable USDC + sDIEM, non-rug USDC rescue, 2-step admin |
 | `csDIEM.sol` | 556 | OZ ERC4626 + ReentrancyGuard | Auto-compounding wrapper over sDIEM. Standard withdraw/redeem disabled (revert in `_withdraw`); exits via async `requestRedeem → 24h → completeRedeem`. Permissionless `harvest(deadline)` claims sDIEM rewards, swaps USDC→DIEM via Slipstream `exactInputSingle` with TWAP-protected slippage + mandatory absolute floor + 1e6 virtual-shares offset. |
-| `sDIEMv2.sol` *(pending deploy)* | 578 | OZ ERC20Permit + ReentrancyGuard + IERC1271 | ERC-20 + EIP-2612 transferable Synthetix staker. Reward checkpoint hooked into OZ v5 `_update(from,to,value)` so transfers cannot leak rewards (Synthetix-ERC20 trap). Per-address withdrawal queue does NOT transfer with sDIEM. All v1 audit fixes carried over (M-01 stale-cooldown claim, M-02 ordering, L-01 dust refund); CEI ordering corrected in `stake()` (pull-then-mint). |
-| `csDIEMv2.sol` *(pending deploy)* | 391 | OZ ERC4626 + ReentrancyGuard | Canonical 4626 wrapper over sDIEM v2 (asset = sDIEM v2, not DIEM). Standard synchronous `redeem`; `maxRedeem == balanceOf` (the v1→v2 composability fix). `maxDeposit`/`maxMint` return 0 when paused (EIP-4626 §3.1; required for Morpho integration). `_deposit`/`_withdraw` guarded by `nonReentrant` against router-mediated reentry during harvest. `depositDIEM` zap for raw-DIEM holders. All three Pashov fixes preserved verbatim. |
+| `sDIEMv2.sol` *(live on Base, 2026-05-21)* | 578 | OZ ERC20Permit + ReentrancyGuard + IERC1271 | ERC-20 + EIP-2612 transferable Synthetix staker. Reward checkpoint hooked into OZ v5 `_update(from,to,value)` so transfers cannot leak rewards (Synthetix-ERC20 trap). Per-address withdrawal queue does NOT transfer with sDIEM. All v1 audit fixes carried over (M-01 stale-cooldown claim, M-02 ordering, L-01 dust refund); CEI ordering corrected in `stake()` (pull-then-mint). |
+| `csDIEMv2.sol` *(live on Base, 2026-05-21)* | 391 | OZ ERC4626 + ReentrancyGuard | Canonical 4626 wrapper over sDIEM v2 (asset = sDIEM v2, not DIEM). Standard synchronous `redeem`; `maxRedeem == balanceOf` (the v1→v2 composability fix). `maxDeposit`/`maxMint` return 0 when paused (EIP-4626 §3.1; required for Morpho integration). `_deposit`/`_withdraw` guarded by `nonReentrant` against router-mediated reentry during harvest. `depositDIEM` zap for raw-DIEM holders. All three Pashov fixes preserved verbatim. |
 
 ## 3. Trust Assumptions
 
@@ -122,7 +122,10 @@ The admin **cannot**:
 - Change the 20/80 split — ratios are constants (redeploy required to change)
 - Bypass `distribute()` to access customer USDC directly
 
-### sDIEMv2 / csDIEMv2 Trust (pending deploy)
+### sDIEMv2 / csDIEMv2 Trust (live on Base, 2026-05-21)
+
+**Live addresses**: sDIEM v2 [`0x8065228a8156590A8BFca30678394e9db91f80Ee`](https://basescan.org/address/0x8065228a8156590A8BFca30678394e9db91f80Ee), csDIEM v2 [`0x78B8726929911044748374178CB2D417A54319e5`](https://basescan.org/address/0x78B8726929911044748374178CB2D417A54319e5). Admin and operator both set to the existing 2/2 Safe `0x01Ea790410D9863A57771D992D2A72ea326DD7C9`. `minDiemPerUsdc` at deploy: `269_056_779_345_881` (≈ 50% of TWAP at DIEM ≈ $1858).
+
 
 Trust assumptions for v2 are a strict superset of v1's, with these deltas:
 

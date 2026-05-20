@@ -189,7 +189,7 @@ to zero.
 
 ### K-10: sDIEM v2 — Internal Adversarial Pass Coverage (Informational)
 
-**Description**: `sDIEMv2.sol` and `csDIEMv2.sol` (the `sdiem-v2` branch, pending deploy) are the ERC-20 + canonical-4626 successors to sDIEM and csDIEM. They have not been covered by an external audit. The codebase was put through **four independent adversarial review passes** in-house (one initial sweep + three parallel specialists: composability for Pendle/Morpho/Spectra/Silo, economic griefing/MEV, and cross-contract / Venice edge cases).
+**Description**: `sDIEMv2.sol` and `csDIEMv2.sol` (live on Base at [`0x8065…80Ee`](https://basescan.org/address/0x8065228a8156590A8BFca30678394e9db91f80Ee) and [`0x78B8…19e5`](https://basescan.org/address/0x78B8726929911044748374178CB2D417A54319e5) since 2026-05-21) are the ERC-20 + canonical-4626 successors to sDIEM and csDIEM. They have not been covered by an external audit. The codebase was put through **four independent adversarial review passes** in-house (one initial sweep + three parallel specialists: composability for Pendle/Morpho/Spectra/Silo, economic griefing/MEV, and cross-contract / Venice edge cases).
 
 **Critical findings + remediations**:
 
@@ -280,7 +280,7 @@ to zero.
 6. After successful `harvest()`, `usdc.balanceOf(csDIEM) == 0` (all claimed USDC swapped + restaked)
 7. `recoverERC20()` always reverts for `DIEM` (underlying) and `USDC` (harvest intermediate)
 
-### sDIEMv2 (pending deploy)
+### sDIEMv2 (live on Base, 2026-05-21)
 
 1. `Σ balanceOf(u) == totalSupply()` (ERC-20 consistency)
 2. `totalStaked() == totalSupply()` (semantic alias preserved for v1 compatibility)
@@ -293,7 +293,7 @@ to zero.
 9. **For any (from, to, amount): `earned(from) + earned(to)` before transfer ≈ after transfer** (transfer preserves reward accruals, within 2-wei rounding)
 10. Withdrawal queue is per-address: transferring sDIEM does not move queued amounts
 
-### csDIEMv2 (pending deploy)
+### csDIEMv2 (live on Base, 2026-05-21)
 
 1. `totalAssets() == sdiem.balanceOf(csDIEMv2)` (single-line accounting — no bookkeeping drift possible)
 2. `totalSupply() > 0 ⇒ totalAssets() > 0` (no shares without backing assets)
