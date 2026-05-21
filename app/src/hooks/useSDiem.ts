@@ -1,26 +1,37 @@
 "use client";
 
 import { useReadContracts, useAccount } from "wagmi";
-import { zeroAddress } from "viem";
-import { sDiemAbi } from "@/config/abis";
-import { SDIEM_ADDRESS } from "@/config/contracts";
+import { zeroAddress, type Abi } from "viem";
+import { sDiemAbi, sDiemV2Abi } from "@/config/abis";
+import { useContracts } from "./useContracts";
+
+// Wagmi's strict tuple inference on useReadContracts can't handle ABI
+// unions, so we cast each call's `abi` to the generic Abi and each contract
+// entry to `never` to bypass the arg-typing narrowing. Result decoding is
+// handled manually via the `get<T>` helper, so we don't rely on wagmi's
+// inferred return types.
+type AnyCall = never;
+const c = (x: unknown) => x as AnyCall;
 
 export function useSDiem() {
   const { address } = useAccount();
+  const { sdiem, isV2 } = useContracts();
   const user = address ?? zeroAddress;
+
+  const abi: Abi = isV2 ? (sDiemV2Abi as unknown as Abi) : (sDiemAbi as unknown as Abi);
 
   const { data, isLoading, refetch } = useReadContracts({
     contracts: [
-      { address: SDIEM_ADDRESS, abi: sDiemAbi, functionName: "totalStaked" },
-      { address: SDIEM_ADDRESS, abi: sDiemAbi, functionName: "rewardRate" },
-      { address: SDIEM_ADDRESS, abi: sDiemAbi, functionName: "periodFinish" },
-      { address: SDIEM_ADDRESS, abi: sDiemAbi, functionName: "paused" },
-      { address: SDIEM_ADDRESS, abi: sDiemAbi, functionName: "balanceOf", args: [user] },
-      { address: SDIEM_ADDRESS, abi: sDiemAbi, functionName: "earned", args: [user] },
-      { address: SDIEM_ADDRESS, abi: sDiemAbi, functionName: "withdrawalRequests", args: [user] },
-      { address: SDIEM_ADDRESS, abi: sDiemAbi, functionName: "canCompleteWithdraw", args: [user] },
-      { address: SDIEM_ADDRESS, abi: sDiemAbi, functionName: "WITHDRAWAL_DELAY" },
-      { address: SDIEM_ADDRESS, abi: sDiemAbi, functionName: "MIN_WITHDRAW" },
+      c({ address: sdiem, abi, functionName: "totalStaked" }),
+      c({ address: sdiem, abi, functionName: "rewardRate" }),
+      c({ address: sdiem, abi, functionName: "periodFinish" }),
+      c({ address: sdiem, abi, functionName: "paused" }),
+      c({ address: sdiem, abi, functionName: "balanceOf", args: [user] }),
+      c({ address: sdiem, abi, functionName: "earned", args: [user] }),
+      c({ address: sdiem, abi, functionName: "withdrawalRequests", args: [user] }),
+      c({ address: sdiem, abi, functionName: "canCompleteWithdraw", args: [user] }),
+      c({ address: sdiem, abi, functionName: "WITHDRAWAL_DELAY" }),
+      c({ address: sdiem, abi, functionName: "MIN_WITHDRAW" }),
     ],
     query: { refetchInterval: 15_000 },
   });

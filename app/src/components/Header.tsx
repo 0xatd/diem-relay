@@ -1,6 +1,41 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useVersion, type Version } from "@/hooks/useVersion";
+
+function VersionToggle() {
+  const { version, setVersion } = useVersion();
+
+  const opt = (v: Version) => {
+    const active = version === v;
+    return (
+      <button
+        key={v}
+        type="button"
+        onClick={() => setVersion(v)}
+        aria-pressed={active}
+        className={`rounded-full px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase transition ${
+          active
+            ? "bg-accent text-black"
+            : "text-gray-400 hover:text-gray-200"
+        }`}
+      >
+        {v}
+      </button>
+    );
+  };
+
+  return (
+    <div
+      role="group"
+      aria-label="Contract version"
+      className="flex items-center gap-0.5 rounded-full border border-border bg-card p-0.5"
+    >
+      {opt("v1")}
+      {opt("v2")}
+    </div>
+  );
+}
 
 export function Header() {
   return (
@@ -12,11 +47,14 @@ export function Header() {
           beta
         </span>
       </div>
-      <ConnectButton
-        showBalance={false}
-        chainStatus="icon"
-        accountStatus="address"
-      />
+      <div className="flex items-center gap-3">
+        <VersionToggle />
+        <ConnectButton
+          showBalance={false}
+          chainStatus="icon"
+          accountStatus="address"
+        />
+      </div>
     </header>
   );
 }

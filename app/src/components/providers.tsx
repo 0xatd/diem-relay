@@ -4,6 +4,7 @@ import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider } from "wagmi";
 import { config } from "@/config/wagmi";
+import { VersionProvider } from "@/hooks/useVersion";
 import { useState, type ReactNode } from "react";
 
 import "@rainbow-me/rainbowkit/styles.css";
@@ -31,7 +32,7 @@ export function Providers({ children }: { children: ReactNode }) {
             borderRadius: "medium",
           })}
         >
-          {children}
+          <VersionProvider>{children}</VersionProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
