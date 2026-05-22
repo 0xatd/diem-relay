@@ -23,7 +23,7 @@ import { useRequestWithdraw, useCompleteWithdraw, useCancelWithdraw } from "@/ho
 import { useClaimReward } from "@/hooks/useClaimReward";
 import { useExit } from "@/hooks/useExit";
 import { useCSDiem, isCSDiemDeployed } from "@/hooks/useCSDiem";
-import { useDepositCSDiem } from "@/hooks/useDepositCSDiem";
+import { useDepositCSDiem, useDepositSDiemToCSDiem } from "@/hooks/useDepositCSDiem";
 import {
   useRequestRedeemCSDiem,
   useCompleteRedeemCSDiem,
@@ -100,13 +100,21 @@ export function SDiemCard() {
   const diem = useDiemToken(sdiemAddr);
   const diemForCs = useDiemToken(csdiemAddr);
 
-  // Approvals — DIEM may need to be approved for either sDIEM or csDIEM.
+  // v2-only: read the user's sDIEM v2 ERC-20 balance + allowance against
+  // csDIEM v2 so the atomic sDIEM→csDIEM wrap path can render. On v1 sDIEM
+  // is non-transferable, so this is ignored.
+  const sdiemAsToken = useDiemToken(csdiemAddr, sdiemAddr);
+
+  // Approvals — DIEM may need to be approved for either sDIEM or csDIEM,
+  // and (v2 only) sDIEM v2 may need to be approved for csDIEM v2.
   const sdiemApproval = useApproval(DIEM_TOKEN, sdiemAddr);
   const csdiemApproval = useApproval(DIEM_TOKEN, csdiemAddr);
+  const sdiemToCsdiemApproval = useApproval(sdiemAddr, csdiemAddr);
 
   // Actions
   const stakeAction = useStake();
   const depositCs = useDepositCSDiem();
+  const depositSDiemCs = useDepositSDiemToCSDiem();
   const requestAction = useRequestWithdraw();
   const completeAction = useCompleteWithdraw();
   const cancelAction = useCancelWithdraw();
@@ -122,6 +130,7 @@ export function SDiemCard() {
   const [stakeAmt, setStakeAmt] = useState("");
   const [withdrawAmt, setWithdrawAmt] = useState("");
   const [wrapAmt, setWrapAmt] = useState("");
+  const [wrapSDiemAmt, setWrapSDiemAmt] = useState("");
   const [redeemAmt, setRedeemAmt] = useState("");
   const [autoCompound, setAutoCompound] = useState(false);
 
@@ -165,9 +174,18 @@ export function SDiemCard() {
     wrapAmt !== "" &&
     diemForCs.allowance < parseUnits(wrapAmt || "0", DIEM_DECIMALS);
 
+  const wrapSDiemNeedsApproval =
+    wrapSDiemAmt !== "" &&
+    sdiemAsToken.allowance < parseUnits(wrapSDiemAmt || "0", DIEM_DECIMALS);
+
   const handleWrap = () => {
     if (!wrapAmt) return;
     depositCs.deposit(parseUnits(wrapAmt, DIEM_DECIMALS));
+  };
+
+  const handleWrapSDiem = () => {
+    if (!wrapSDiemAmt) return;
+    depositSDiemCs.depositSDiem(parseUnits(wrapSDiemAmt, DIEM_DECIMALS));
   };
 
   const handleRequestRedeem = () => {
@@ -193,6 +211,9 @@ export function SDiemCard() {
   const wrapping =
     csdiemApproval.isPending || csdiemApproval.isConfirming ||
     depositCs.isPending || depositCs.isConfirming;
+  const wrappingSDiem =
+    sdiemToCsdiemApproval.isPending || sdiemToCsdiemApproval.isConfirming ||
+    depositSDiemCs.isPending || depositSDiemCs.isConfirming;
   const redeemingV1 = requestRedeemCs.isPending || requestRedeemCs.isConfirming;
   const completingCs = completeRedeemCs.isPending || completeRedeemCs.isConfirming;
   const cancellingCs = cancelRedeemCs.isPending || cancelRedeemCs.isConfirming;
@@ -435,10 +456,18 @@ export function SDiemCard() {
 
         <div className="space-y-2 rounded-lg border border-border bg-card-inner p-3">
           <p className="text-xs font-medium text-gray-300">Wrap DIEM → csDIEM</p>
-          <p className="text-[11px] leading-relaxed text-gray-500">
-            Already staking in sDIEM? Withdraw it first (24h delay), then wrap
-            the resulting DIEM here.
-          </p>
+          {!isV2 && (
+            <p className="text-[11px] leading-relaxed text-gray-500">
+              Already staking in sDIEM? Withdraw it first (24h delay), then
+              wrap the resulting DIEM here.
+            </p>
+          )}
+          {isV2 && (
+            <p className="text-[11px] leading-relaxed text-gray-500">
+              Zaps raw DIEM straight into csDIEM v2 (stakes into sDIEM v2
+              internally). No 24h delay.
+            </p>
+          )}
           <AmountInput
             value={wrapAmt}
             onChange={setWrapAmt}
@@ -460,14 +489,72 @@ export function SDiemCard() {
           />
         </div>
 
+        {/* v2-only: atomic sDIEM v2 → csDIEM v2 via standard ERC-4626 deposit.
+            The v2 vault's asset() is sDIEM v2, so existing stakers can wrap
+            without going through the 24h Venice cooldown. */}
+        {isV2 && (
+          <div className="space-y-2 rounded-lg border border-border bg-card-inner p-3">
+            <p className="text-xs font-medium text-gray-300">
+              Wrap sDIEM v2 → csDIEM v2
+            </p>
+            <p className="text-[11px] leading-relaxed text-gray-500">
+              Already staking sDIEM v2? Wrap it directly — atomic, no 24h
+              delay. Rewards accrued by your sDIEM v2 stay with the position.
+            </p>
+            <AmountInput
+              value={wrapSDiemAmt}
+              onChange={setWrapSDiemAmt}
+              max={sdiemAsToken.balance}
+              disabled={csdiem.paused}
+            />
+            {sdiemAsToken.allowance < UNLIMITED_THRESHOLD && (
+              <p className="text-[10px] text-gray-500">
+                Current sDIEM v2 allowance:{" "}
+                <span className="font-mono text-gray-400">
+                  {formatDiem(sdiemAsToken.allowance)} sDIEM v2
+                </span>
+              </p>
+            )}
+            <ActionButton
+              needsApproval={wrapSDiemNeedsApproval}
+              onApprove={() => sdiemToCsdiemApproval.approve()}
+              onAction={handleWrapSDiem}
+              actionLabel="Wrap sDIEM v2"
+              disabled={
+                !wrapSDiemAmt ||
+                wrapSDiemAmt === "0" ||
+                csdiem.paused ||
+                sdiemAsToken.balance === 0n
+              }
+              loading={wrappingSDiem}
+            />
+            <TxStatus
+              isPending={
+                depositSDiemCs.isPending || sdiemToCsdiemApproval.isPending
+              }
+              isConfirming={
+                depositSDiemCs.isConfirming || sdiemToCsdiemApproval.isConfirming
+              }
+              isSuccess={depositSDiemCs.isSuccess}
+              error={depositSDiemCs.error ?? sdiemToCsdiemApproval.error}
+              hash={depositSDiemCs.hash ?? sdiemToCsdiemApproval.hash}
+              onReset={() => {
+                depositSDiemCs.reset();
+                sdiemToCsdiemApproval.reset();
+              }}
+            />
+          </div>
+        )}
+
         <div className="space-y-2 rounded-lg border border-border bg-card-inner p-3">
           <p className="text-xs font-medium text-gray-300">
             Unwrap csDIEM → {isV2 ? "sDIEM" : "DIEM"}
           </p>
           {isV2 && (
             <p className="text-[11px] leading-relaxed text-gray-500">
-              Synchronous redeem returns sDIEM v2 to your wallet. To exit to
-              raw DIEM, withdraw the sDIEM v2 (24h delay) on the Withdraw tab.
+              Atomic, one tx — returns sDIEM v2 to your wallet immediately.
+              To exit to raw DIEM, then withdraw the sDIEM v2 on the Withdraw
+              tab (24h Venice cooldown).
             </p>
           )}
           <AmountInput
