@@ -1,5 +1,11 @@
 # DIEM Staking
 
+## What this is
+
+DIEM Relay is the on-chain staking/yield contract system around DIEM and Venice compute revenue. It is crypto infrastructure, not a customer-facing content/app workflow.
+
+Status: high-risk smart-contract/payment-adjacent surface. Review contracts, settlement assumptions, and deployment state carefully before changes.
+
 Stake DIEM tokens to earn yield from Venice AI compute revenue. All staked DIEM is forward-staked on Venice for compute credits, and revenue flows back to stakers as USDC or compounded DIEM.
 
 Deployed on **Base**. Built with Foundry (Solidity 0.8.24).
