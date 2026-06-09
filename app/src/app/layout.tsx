@@ -6,8 +6,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "DIEM Staking",
-  description: "Stake DIEM to earn USDC or compounding DIEM yield",
+  title: "DIEM Relay",
+  description: "Stake DIEM on Base and fund discounted Venice AI inference credits.",
 };
 
 export default function RootLayout({
