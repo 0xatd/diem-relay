@@ -7,8 +7,8 @@ const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: "DIEM Staking — DIEM Relay",
-  description: "Stake DIEM to earn USDC via discounted AI compute",
+  title: "DIEMpool",
+  description: "Supply DIEM on Base through the DIEM Relay v2 contracts.",
 };
 
 export default function RootLayout({
@@ -18,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${dmSans.variable} ${jetbrainsMono.variable} font-sans antialiased min-h-screen`}>
+      <body className={`${dmSans.variable} ${jetbrainsMono.variable}`}>
         <Providers>{children}</Providers>
       </body>
     </html>
