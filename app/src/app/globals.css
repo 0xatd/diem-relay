@@ -857,6 +857,73 @@ body {
   font-size: 13px;
 }
 
+.pool-powered-by {
+  align-items: center;
+  border: 1px solid rgba(247, 147, 26, 0.22);
+  background:
+    linear-gradient(135deg, rgba(247, 147, 26, 0.1), rgba(0, 212, 170, 0.06)),
+    rgba(18, 18, 26, 0.86);
+  border-radius: 8px;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.pool-powered-by > span {
+  color: #f7931a;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pool-powered-links {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pool-powered-links a {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 10, 15, 0.56);
+  border-radius: 8px;
+  color: #f6f6f8;
+  display: block;
+  min-width: 0;
+  padding: 12px 13px;
+  text-decoration: none;
+  transition: border-color 0.2s, background 0.2s, transform 0.2s;
+}
+
+.pool-powered-links a:hover {
+  background: rgba(10, 10, 15, 0.8);
+  border-color: rgba(247, 147, 26, 0.46);
+  transform: translateY(-1px);
+}
+
+.pool-powered-links strong,
+.pool-powered-links small {
+  display: block;
+  overflow-wrap: break-word;
+}
+
+.pool-powered-links strong {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.pool-powered-links small {
+  color: #9b9bae;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
 .pool-manage {
   border-top: 1px solid #2a2a3a;
   margin-top: 16px;
@@ -956,8 +1023,15 @@ body {
   .pool-risk-list-compact,
   .pool-token-tabs,
   .pool-balance-grid,
-  .pool-mechanics-strip {
+  .pool-mechanics-strip,
+  .pool-powered-links {
     grid-template-columns: 1fr;
+  }
+
+  .pool-powered-by {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .pool-input {
@@ -990,6 +1064,7 @@ body {
 .pool-action-tabs,
 .pool-input-row,
 .pool-mechanics-strip,
+.pool-powered-by,
 .pool-stat {
   min-width: 0;
 }
@@ -1007,6 +1082,7 @@ body {
   .pool-panel,
   .pool-stat,
   .pool-status-card,
+  .pool-powered-by,
   .pool-mechanics-strip div {
     width: 100%;
     max-width: 100%;
@@ -1149,6 +1225,7 @@ body {
   .pool-app-grid,
   .pool-stats,
   .pool-mechanics-strip,
+  .pool-powered-by,
   .pool-panel,
   .pool-status-card,
   .pool-subtitle,

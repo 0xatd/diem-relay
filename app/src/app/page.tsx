@@ -697,6 +697,24 @@ export default function PoolPage() {
             <span>sDIEM withdraws to DIEM after the 24h cooldown. csDIEM converts to sDIEM first.</span>
           </div>
         </section>
+
+        <section className="pool-powered-by" aria-label="Powered by">
+          <span>Powered by</span>
+          <div className="pool-powered-links">
+            <a href="https://cheaptokens.ai" target="_blank" rel="noreferrer">
+              <strong>CheapTokens.ai</strong>
+              <small>discounted inference credits</small>
+            </a>
+            <a href="https://venice.ai" target="_blank" rel="noreferrer">
+              <strong>Venice.ai</strong>
+              <small>private AI infrastructure</small>
+            </a>
+            <a href="https://diempool.com" target="_blank" rel="noreferrer">
+              <strong>DIEMpool.com</strong>
+              <small>staking interface lineage</small>
+            </a>
+          </div>
+        </section>
       </div>
       </div>
     </>
