@@ -682,12 +682,12 @@ export default function PoolPage() {
               <strong>{formatToken(csTotalAssets)} sDIEM</strong>
             </div>
             <div>
-              <span>USDC stream</span>
-              <strong>{dailyRewardLabel}</strong>
+              <span>csDIEM supply</span>
+              <strong>{formatToken(csTotalSupply)} csDIEM</strong>
             </div>
             <div>
-              <span>Pending harvest</span>
-              <strong>{formatUsd(pendingHarvest)}</strong>
+              <span>USDC stream</span>
+              <strong>{dailyRewardLabel}</strong>
             </div>
           </div>
         </section>

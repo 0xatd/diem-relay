@@ -957,6 +957,7 @@ body {
   flex: 1 1 auto;
   gap: 10px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
 }
 
 .pool-powered-links a {
@@ -1101,7 +1102,7 @@ body {
   }
 
   .pool-powered-by {
-    align-items: stretch;
+    align-items: center;
     flex-direction: column;
     gap: 10px;
   }
@@ -1878,11 +1879,12 @@ body {
   background: #ffffff;
   border: 1px solid #e7e8ef;
   border-radius: 14px;
-  align-items: stretch;
+  align-items: center;
   display: flex;
   flex-direction: column;
   margin-top: 20px;
   padding: 18px 20px;
+  text-align: center;
 }
 
 .pool-powered-by > span {
