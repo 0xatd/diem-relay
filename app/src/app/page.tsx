@@ -90,6 +90,19 @@ function formatDuration(seconds: bigint) {
   return `${hours}h ${minutes}m`;
 }
 
+function formatUtcDateTime(timestamp: bigint) {
+  if (timestamp <= 0n) return 'Not queued';
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  }).format(new Date(Number(timestamp) * 1000));
+}
+
 function minBigInt(a: bigint, b: bigint) {
   return a < b ? a : b;
 }
@@ -200,6 +213,8 @@ export default function PoolPage() {
   const withdrawalAmount = withdrawalRequest[0] ?? 0n;
   const withdrawalStart = withdrawalRequest[1] ?? 0n;
   const withdrawalReadyAt = withdrawalStart + DAY_SECONDS;
+  const withdrawalQueuedAtLabel = formatUtcDateTime(withdrawalStart);
+  const withdrawalReadyAtLabel = formatUtcDateTime(withdrawalReadyAt);
   const withdrawalWait = secondsUntil(withdrawalReadyAt);
   const veniceWait = secondsUntil(veniceCooldownEnd);
   const maturedVeniceDiem = veniceWait === 0n ? vaultVenicePendingDiem : 0n;
@@ -590,10 +605,16 @@ export default function PoolPage() {
                       </div>
                       {withdrawalAmount > 0n && (
                         <div className="pool-preview-row">
-                          <span>Withdrawal queue</span>
+                          <span>Queued withdrawal</span>
                           <strong>
                             {formatToken(withdrawalAmount)} DIEM · {withdrawalStatus}
                           </strong>
+                        </div>
+                      )}
+                      {withdrawalAmount > 0n && (
+                        <div className="pool-preview-row">
+                          <span>Requested</span>
+                          <strong>{withdrawalQueuedAtLabel}</strong>
                         </div>
                       )}
                       {withdrawalAmount > 0n && nextClaimableDiem > 0n && remainingAfterNextClaim > 0n && (
@@ -666,6 +687,7 @@ export default function PoolPage() {
                     <div>
                       <span>Pending withdrawal</span>
                       <strong>{formatToken(withdrawalAmount)} DIEM</strong>
+                      <small>Requested {withdrawalQueuedAtLabel}</small>
                       <small>{withdrawalSummaryStatus}</small>
                       <div className="pool-pending-breakdown">
                         <div>
@@ -675,6 +697,10 @@ export default function PoolPage() {
                         <div>
                           <span>Still queued</span>
                           <strong>{formatToken(remainingAfterNextClaim)} DIEM</strong>
+                        </div>
+                        <div>
+                          <span>Request ready</span>
+                          <strong>{withdrawalReadyAtLabel}</strong>
                         </div>
                       </div>
                     </div>
