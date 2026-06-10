@@ -1438,16 +1438,16 @@ body {
 
 .site-connect-button button,
 .site-connect-button [data-rk] button {
-  background: #16915a !important;
-  border: 1px solid #16915a !important;
+  background: linear-gradient(135deg, #4a52e0, #8f96ff) !important;
+  border: 1px solid #6f78ff !important;
   color: #ffffff !important;
-  box-shadow: none !important;
+  box-shadow: 0 10px 24px -16px rgba(74, 82, 224, 0.72) !important;
 }
 
 .site-connect-button button:hover,
 .site-connect-button [data-rk] button:hover {
-  background: #117848 !important;
-  border-color: #117848 !important;
+  background: linear-gradient(135deg, #3a41c4, #747cff) !important;
+  border-color: #8f96ff !important;
 }
 
 .theme-toggle {
@@ -1573,7 +1573,7 @@ body {
 }
 
 .pool-status-card strong {
-  color: #4a52e0;
+  color: #16915a;
   font-family: 'JetBrains Mono', monospace;
   font-size: 30px;
   font-weight: 700;
@@ -2062,12 +2062,15 @@ body {
   color: #a9afc0;
 }
 
-.theme-dark .pool-status-card strong,
 .theme-dark .pool-kicker,
 .theme-dark .pool-token-primer span,
 .theme-dark .site-logo-icon,
 .theme-dark .pool-small-button {
   color: #8f96ff;
+}
+
+.theme-dark .pool-status-card strong {
+  color: #46d38a;
 }
 
 .theme-dark .pool-token-primer strong {
