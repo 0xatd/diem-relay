@@ -19,9 +19,6 @@ export function Header() {
           <a className={`site-nav-link${pathname === "/" ? " site-nav-link-active" : ""}`} href="/">
             Stake
           </a>
-          <a className={`site-nav-link${pathname === "/about" ? " site-nav-link-active" : ""}`} href="/about">
-            About
-          </a>
           <a className={`site-nav-link${pathname === "/docs" ? " site-nav-link-active" : ""}`} href="/docs">
             Docs
           </a>

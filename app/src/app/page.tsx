@@ -687,7 +687,6 @@ export default function PoolPage() {
 
         <footer className="pool-links-footer">
           <a href="/docs">Docs</a>
-          <a href="/about">About</a>
           <a href={GITHUB_URL} rel="noreferrer" target="_blank">GitHub</a>
           <a href={CONTRACTS_SECTION_URL}>Contracts (BaseScan)</a>
         </footer>
