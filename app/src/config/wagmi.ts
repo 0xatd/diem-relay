@@ -2,9 +2,9 @@ import { createConfig, http } from "wagmi";
 import { base } from "wagmi/chains";
 import { injected, coinbaseWallet } from "wagmi/connectors";
 
-const alchemyUrl =
+const baseRpcUrl =
   process.env.NEXT_PUBLIC_ALCHEMY_URL ??
-  "https://base-mainnet.g.alchemy.com/v2/demo";
+  "https://mainnet.base.org";
 
 export const config = createConfig({
   chains: [base],
@@ -13,7 +13,7 @@ export const config = createConfig({
     coinbaseWallet({ appName: "DIEM Relay" }),
   ],
   transports: {
-    [base.id]: http(alchemyUrl),
+    [base.id]: http(baseRpcUrl),
   },
   ssr: true,
 });

@@ -51,7 +51,7 @@ function formatUsd(value: bigint, maxFraction = 2) {
 
 function formatApy(usdcPerDiemDay: bigint) {
   const annualPercent = Number(formatUnits(usdcPerDiemDay, 6)) * 365 * 100;
-  if (!Number.isFinite(annualPercent) || annualPercent <= 0) return 'APY pending';
+  if (!Number.isFinite(annualPercent) || annualPercent <= 0) return '0%';
   return `${annualPercent.toLocaleString(undefined, {
     maximumFractionDigits: annualPercent >= 100 ? 0 : 2,
   })}%`;
@@ -180,8 +180,7 @@ export default function PoolPage() {
   const dailyReward = rewardRate * DAY_SECONDS;
   const usdcPerDiemDay = totalStaked > 0n ? (dailyReward * parseUnits('1', 18)) / totalStaked : 0n;
   const rewardStreamActive = dailyReward > 0n && totalStaked > 0n && secondsUntil(periodFinish) > 0n;
-  const currentApyLabel = rewardStreamActive ? formatApy(usdcPerDiemDay) : 'APY pending';
-  const dailyRewardLabel = dailyReward > 0n ? `${formatUsd(dailyReward)}/day` : 'Not streaming';
+  const currentApyLabel = rewardStreamActive ? formatApy(usdcPerDiemDay) : '0%';
   const withdrawalAmount = withdrawalRequest[0] ?? 0n;
   const withdrawalStart = withdrawalRequest[1] ?? 0n;
   const withdrawalReadyAt = withdrawalStart + DAY_SECONDS;
@@ -435,8 +434,8 @@ export default function PoolPage() {
                         <strong>{mode === 'liquid' ? 'Claim USDC manually' : 'Compounds into csDIEM share price'}</strong>
                       </div>
                       <div className="pool-preview-row">
-                        <span>Current rate</span>
-                        <strong>{dailyRewardLabel}</strong>
+                        <span>Current APY</span>
+                        <strong>{currentApyLabel}</strong>
                       </div>
                     </div>
 
@@ -690,16 +689,16 @@ export default function PoolPage() {
               <strong>{formatToken(totalStaked)} DIEM</strong>
             </div>
             <div>
-              <span>Compounding vault</span>
-              <strong>{formatToken(csTotalAssets)} sDIEM</strong>
+              <span>DIEM in csDIEM vault</span>
+              <strong>{formatToken(csTotalAssets)} DIEM</strong>
             </div>
             <div>
               <span>csDIEM supply</span>
               <strong>{formatToken(csTotalSupply, CSDIEM_DECIMALS)} csDIEM</strong>
             </div>
             <div>
-              <span>USDC stream</span>
-              <strong>{dailyRewardLabel}</strong>
+              <span>Actual APY</span>
+              <strong>{currentApyLabel}</strong>
             </div>
           </div>
         </section>
