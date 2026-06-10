@@ -1,4 +1,5 @@
 import { Header } from "@/components/Header";
+import { CONTRACTS_SECTION_URL, GITHUB_URL } from "@/config/protocol-links";
 
 export default function AboutPage() {
   return (
@@ -17,7 +18,7 @@ export default function AboutPage() {
           <p>
             Think of it like Airbnb: you own the asset, we run the marketplace. Suppliers
             bring the DIEM, Diem Relay handles selling the inference and distributing the
-            revenue, and keeps a 10% platform fee. The other 90% goes to suppliers in USDC,
+            revenue, and keeps a 20% platform fee. The other 80% goes to suppliers in USDC,
             in proportion to what they&apos;ve supplied. The inference itself is bought at{" "}
             <a href="https://cheaptokens.ai/buy" rel="noreferrer" target="_blank">
               CheapTokens
@@ -48,9 +49,8 @@ export default function AboutPage() {
           <p>The contracts are deployed on Base and the code is open source.</p>
 
           <p>
-            {/* TODO: Diem Relay GitHub URL */}
-            <a href="#">View on GitHub</a> · {/* TODO: contracts URL */}
-            <a href="#">View contracts on BaseScan</a>
+            <a href={GITHUB_URL} rel="noreferrer" target="_blank">View on GitHub</a> ·{" "}
+            <a href={CONTRACTS_SECTION_URL}>View contracts on BaseScan</a>
           </p>
         </article>
       </main>

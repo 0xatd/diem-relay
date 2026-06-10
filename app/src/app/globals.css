@@ -2241,6 +2241,7 @@ body {
 .content-page a {
   color: #4a52e0;
   font-weight: 800;
+  overflow-wrap: anywhere;
   text-decoration: none;
 }
 

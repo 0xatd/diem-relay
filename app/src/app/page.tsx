@@ -14,6 +14,7 @@ import { formatUnits, parseUnits, type Address } from 'viem';
 import { Header } from '@/components/Header';
 import { csDiemV2Abi, erc20Abi, sDiemV2Abi } from '@/config/abis';
 import { CSDIEM_V2_ADDRESS, DIEM_TOKEN, SDIEM_V2_ADDRESS } from '@/config/contracts';
+import { CONTRACTS_SECTION_URL, GITHUB_URL } from '@/config/protocol-links';
 
 
 type SupplyMode = 'liquid' | 'convert' | 'direct';
@@ -663,10 +664,8 @@ export default function PoolPage() {
         <footer className="pool-links-footer">
           <a href="/docs">Docs</a>
           <a href="/about">About</a>
-          {/* TODO: Diem Relay GitHub URL */}
-          <a href="#">GitHub</a>
-          {/* TODO: contracts URL */}
-          <a href="#">Contracts (BaseScan)</a>
+          <a href={GITHUB_URL} rel="noreferrer" target="_blank">GitHub</a>
+          <a href={CONTRACTS_SECTION_URL}>Contracts (BaseScan)</a>
         </footer>
       </div>
       </div>

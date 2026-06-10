@@ -1,4 +1,10 @@
 import { Header } from "@/components/Header";
+import {
+  AUDIT_BRIEF_URL,
+  BASESCAN_ADDRESSES,
+  GITHUB_URL,
+  KNOWN_ISSUES_URL,
+} from "@/config/protocol-links";
 
 export default function DocsPage() {
   return (
@@ -23,7 +29,7 @@ export default function DocsPage() {
             <li>Supply DIEM to the pool and receive sDIEM or csDIEM.</li>
             <li>The pooled DIEM backs AI inference that&apos;s sold to compute buyers.</li>
             <li>
-              USDC from each sale is distributed to suppliers, with a 10% platform fee
+              USDC from each sale is distributed to suppliers, with a 20% platform fee
               retained by Diem Relay.
             </li>
           </ol>
@@ -40,7 +46,7 @@ export default function DocsPage() {
           <h2>Fees</h2>
 
           <p>
-            Diem Relay keeps a 10% platform fee on inference revenue. The remaining 90% is
+            Diem Relay keeps a 20% platform fee on inference revenue. The remaining 80% is
             distributed to suppliers in USDC, pro-rata to their share of the pool. There is no
             fee to supply or withdraw beyond network gas.
           </p>
@@ -69,25 +75,54 @@ export default function DocsPage() {
             cooldown. csDIEM unwraps to sDIEM first, then follows the same 24-hour path to DIEM.
           </p>
 
-          <h2>Contracts</h2>
+          <h2 id="contracts">Contracts</h2>
 
           <p>Deployed on Base:</p>
 
           <ul>
-            <li>DIEMVault — deposit and supply</li>
-            <li>sDIEM — liquid staking receipt</li>
-            <li>csDIEM — ERC-4626 compounding vault</li>
-            <li>RevenueSplitter — USDC reward distribution</li>
+            <li>
+              DIEM token —{" "}
+              <a href={BASESCAN_ADDRESSES.diemToken} rel="noreferrer" target="_blank">
+                0xf4d97f2da56e8c3098f3a8d538db630a2606a024
+              </a>
+            </li>
+            <li>
+              DIEMVault — deposit and supply —{" "}
+              <a href={BASESCAN_ADDRESSES.diemVault} rel="noreferrer" target="_blank">
+                0xdc9625b026f6Dd17F9d96e608592A9C592e27eEF
+              </a>
+            </li>
+            <li>
+              sDIEM v2 — liquid staking receipt —{" "}
+              <a href={BASESCAN_ADDRESSES.sdiemV2} rel="noreferrer" target="_blank">
+                0x8065228a8156590A8BFca30678394e9db91f80Ee
+              </a>
+            </li>
+            <li>
+              csDIEM v2 — ERC-4626 compounding vault —{" "}
+              <a href={BASESCAN_ADDRESSES.csdiemV2} rel="noreferrer" target="_blank">
+                0x78B8726929911044748374178CB2D417A54319e5
+              </a>
+            </li>
+            <li>
+              RevenueSplitter — USDC reward distribution —{" "}
+              <a href={BASESCAN_ADDRESSES.revenueSplitter} rel="noreferrer" target="_blank">
+                0xd185138CEA135E60CA6E567BE53DEC81D89Ce7D6
+              </a>
+            </li>
+            <li>
+              Admin / operator 2-of-2 Safe —{" "}
+              <a href={BASESCAN_ADDRESSES.adminSafe} rel="noreferrer" target="_blank">
+                0x01Ea790410D9863A57771D992D2A72ea326DD7C9
+              </a>
+            </li>
           </ul>
 
           <p>
-            {/* TODO: add each deployed Base address, linked to BaseScan */}
-            [TODO: add each deployed Base address, linked to BaseScan]
-          </p>
-
-          <p>
-            {/* TODO: Diem Relay GitHub URL */}
-            Source code: [TODO: Diem Relay GitHub URL]
+            Source code:{" "}
+            <a href={GITHUB_URL} rel="noreferrer" target="_blank">
+              Figu3/diem-relay
+            </a>
           </p>
 
           <h2>Risks</h2>
@@ -95,8 +130,18 @@ export default function DocsPage() {
           <p>Interacting with the relay involves smart contract risk.</p>
 
           <p>
-            {/* TODO: add audit status and link, plus any other disclosures you want surfaced */}
-            [TODO: add audit status and link, plus any other disclosures you want surfaced]
+            Bretzel and Pashov AI reviewed the original sDIEM and DIEMVault contracts in
+            March 2026, with findings remediated. RevenueSplitter, csDIEM, sDIEM v2, and
+            csDIEM v2 have in-house adversarial review coverage and are pending external
+            review before meaningful TVL. Read the{" "}
+            <a href={AUDIT_BRIEF_URL} rel="noreferrer" target="_blank">
+              audit briefing
+            </a>{" "}
+            and{" "}
+            <a href={KNOWN_ISSUES_URL} rel="noreferrer" target="_blank">
+              known issues
+            </a>
+            .
           </p>
         </article>
       </main>
