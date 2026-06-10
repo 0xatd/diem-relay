@@ -17,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="theme-light" suppressHydrationWarning>
       <body className={`${dmSans.variable} ${jetbrainsMono.variable}`}>
         <Providers>{children}</Providers>
       </body>

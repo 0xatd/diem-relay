@@ -1,6 +1,7 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function Header() {
   return (
@@ -30,6 +31,7 @@ export function Header() {
         </nav>
       </div>
       <div className="site-header-right">
+        <ThemeToggle />
         <ConnectButton />
       </div>
     </header>

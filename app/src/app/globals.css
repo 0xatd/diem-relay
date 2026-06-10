@@ -104,7 +104,10 @@ body {
 }
 
 .site-header-right {
+  align-items: center;
+  display: flex;
   flex: 0 0 auto;
+  gap: 10px;
   margin-left: auto;
 }
 
@@ -1321,6 +1324,47 @@ body {
   font-weight: 800 !important;
 }
 
+.theme-toggle {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e7e8ef;
+  color: #191c28;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 11px;
+}
+
+.theme-toggle-track {
+  background: #edeefe;
+  border: 1px solid #d7dae6;
+  border-radius: 999px;
+  display: inline-flex;
+  height: 18px;
+  padding: 2px;
+  width: 34px;
+}
+
+.theme-toggle-thumb {
+  background: #4a52e0;
+  border-radius: 50%;
+  display: block;
+  height: 12px;
+  transform: translateX(0);
+  transition: transform 0.16s ease;
+  width: 12px;
+}
+
+.theme-toggle-label {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.theme-dark .theme-toggle-thumb {
+  transform: translateX(14px);
+}
+
 .pool-page {
   background:
     radial-gradient(900px 420px at 78% -8%, #eef0fe 0%, rgba(238, 240, 254, 0) 60%),
@@ -1711,6 +1755,141 @@ body {
 
 .pool-powered-links small {
   color: #5a6072;
+}
+
+.theme-dark body {
+  background: #0c0d13;
+  color: #f6f7fb;
+}
+
+.theme-dark .site-header {
+  background: rgba(14, 15, 23, 0.9);
+  border-bottom-color: #272a38;
+  color: #f6f7fb;
+}
+
+.theme-dark .site-logo-text,
+.theme-dark .site-nav-link-active,
+.theme-dark .site-nav-link:hover,
+.theme-dark .pool-title,
+.theme-dark .pool-panel-title,
+.theme-dark .pool-token-tabs strong,
+.theme-dark .pool-token,
+.theme-dark .pool-preview-row strong,
+.theme-dark .pool-position-row strong,
+.theme-dark .pool-balance-grid strong,
+.theme-dark .pool-pending-card strong,
+.theme-dark .pool-rewards-card strong,
+.theme-dark .pool-stat strong,
+.theme-dark .pool-mechanics-strip strong,
+.theme-dark .pool-powered-links strong {
+  color: #f6f7fb;
+}
+
+.theme-dark .site-nav-link {
+  color: #a9afc0;
+}
+
+.theme-dark .site-nav-link:hover,
+.theme-dark .site-nav-link-active,
+.theme-dark .pool-action-tabs,
+.theme-dark .pool-connect,
+.theme-dark .pool-empty-state,
+.theme-dark .pool-balance-grid div,
+.theme-dark .pool-action:disabled,
+.theme-dark .pool-secondary-action,
+.theme-dark .pool-powered-links a {
+  background: #171925;
+}
+
+.theme-dark .pool-page {
+  background:
+    radial-gradient(900px 420px at 78% -8%, rgba(74, 82, 224, 0.22) 0%, rgba(74, 82, 224, 0) 60%),
+    #0c0d13;
+  color: #f6f7fb;
+}
+
+.theme-dark .pool-status-card,
+.theme-dark .pool-panel,
+.theme-dark .pool-stat,
+.theme-dark .pool-mechanics-strip div,
+.theme-dark .pool-powered-by,
+.theme-dark .pool-input-row,
+.theme-dark .pool-token-tabs button,
+.theme-dark .theme-toggle {
+  background: #11131d;
+  border-color: #272a38;
+}
+
+.theme-dark .pool-primary-panel {
+  box-shadow: 0 24px 70px -38px rgba(0, 0, 0, 0.7);
+}
+
+.theme-dark .pool-status-card span,
+.theme-dark .pool-panel-copy,
+.theme-dark .pool-stat span,
+.theme-dark .pool-mechanics-strip span,
+.theme-dark .pool-input-meta,
+.theme-dark .pool-empty-state,
+.theme-dark .pool-preview-row,
+.theme-dark .pool-position-row,
+.theme-dark .pool-subtitle,
+.theme-dark .pool-token-tabs span,
+.theme-dark .pool-balance-grid span,
+.theme-dark .pool-pending-card span,
+.theme-dark .pool-rewards-card span,
+.theme-dark .pool-powered-links small,
+.theme-dark .pool-powered-by > span {
+  color: #a9afc0;
+}
+
+.theme-dark .pool-status-card strong,
+.theme-dark .pool-kicker,
+.theme-dark .site-logo-icon,
+.theme-dark .pool-small-button {
+  color: #8f96ff;
+}
+
+.theme-dark .pool-panel-header,
+.theme-dark .pool-preview {
+  border-color: #272a38;
+}
+
+.theme-dark .pool-action-tabs .pool-action-tab-active,
+.theme-dark .pool-token-tabs .pool-token-tab-active,
+.theme-dark .pool-powered-links a:hover {
+  background: #20233a;
+  border-color: #6f78ff;
+}
+
+.theme-dark .pool-input,
+.theme-dark .theme-toggle {
+  color: #f6f7fb;
+}
+
+.theme-dark .pool-input::placeholder {
+  color: #6f7486;
+}
+
+.theme-dark .pool-small-button,
+.theme-dark .theme-toggle-track {
+  background: #20233a;
+  border-color: #353955;
+}
+
+.theme-dark .pool-action {
+  background: #6f78ff;
+}
+
+.theme-dark .pool-action:hover:not(:disabled) {
+  background: #5962eb;
+}
+
+.theme-dark .pool-rewards-card,
+.theme-dark .pool-tx {
+  background: rgba(22, 145, 90, 0.12);
+  border-color: rgba(22, 145, 90, 0.28);
+  color: #55d99c;
 }
 
 @media (max-width: 920px) {
