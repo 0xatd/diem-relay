@@ -291,3 +291,7 @@ export const csDiemV2Abi = [
   // csDIEM v2 shares against the result.
   { type: "function", name: "depositDIEM", inputs: [{ name: "diemAmount", type: "uint256" }, { name: "receiver", type: "address" }], outputs: [{ name: "shares", type: "uint256" }], stateMutability: "nonpayable" },
 ] as const;
+
+export const revenueSplitterAbi = [
+  { type: "function", name: "totalStakerPaid", inputs: [], outputs: [{ name: "", type: "uint256" }], stateMutability: "view" },
+] as const;

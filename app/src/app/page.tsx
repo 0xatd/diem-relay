@@ -12,8 +12,8 @@ import {
 import { base } from 'wagmi/chains';
 import { formatUnits, parseUnits, type Address } from 'viem';
 import { Header } from '@/components/Header';
-import { csDiemV2Abi, erc20Abi, sDiemV2Abi } from '@/config/abis';
-import { CSDIEM_V2_ADDRESS, DIEM_TOKEN, SDIEM_V2_ADDRESS } from '@/config/contracts';
+import { csDiemV2Abi, erc20Abi, revenueSplitterAbi, sDiemV2Abi } from '@/config/abis';
+import { CSDIEM_V2_ADDRESS, DIEM_TOKEN, REVENUE_SPLITTER_ADDRESS, SDIEM_V2_ADDRESS } from '@/config/contracts';
 import {
   CHEAPTOKENS_BUY_URL,
   CONTRACTS_SECTION_URL,
@@ -105,6 +105,7 @@ export default function PoolPage() {
   const diem = DIEM_TOKEN as Address;
   const sdiem = SDIEM_V2_ADDRESS as Address;
   const csdiem = CSDIEM_V2_ADDRESS as Address;
+  const revenueSplitter = REVENUE_SPLITTER_ADDRESS as Address;
   const spender = mode === 'liquid' ? sdiem : csdiem;
   const parsedDeposit = parseDiemAmount(depositAmount);
   const parsedRedeem = parseCsDiemAmount(redeemAmount);
@@ -134,6 +135,7 @@ export default function PoolPage() {
       { address: csdiem, abi: csDiemV2Abi, functionName: 'pendingHarvest' },
       { address: sdiem, abi: erc20Abi, functionName: 'allowance', args: [account, csdiem] },
       { address: csdiem, abi: csDiemV2Abi, functionName: 'previewDeposit', args: [parsedDeposit] },
+      { address: revenueSplitter, abi: revenueSplitterAbi, functionName: 'totalStakerPaid' },
     ],
     query: { refetchInterval: 20_000 },
   });
@@ -163,6 +165,7 @@ export default function PoolPage() {
   const pendingHarvest = read<bigint>(18, 0n);
   const sdiemToCsAllowance = read<bigint>(19, 0n);
   const convertPreview = read<bigint>(20, 0n);
+  const totalUsdcDistributed = read<bigint>(21, 0n);
   const withdrawUsesCsdiem = withdrawMode !== 'liquid';
   const withdrawInputAmount = withdrawUsesCsdiem ? redeemAmount : withdrawAmount;
   const parsedWithdrawInput = withdrawUsesCsdiem ? parsedRedeem : parsedWithdraw;
@@ -697,8 +700,8 @@ export default function PoolPage() {
               <strong>{formatToken(csTotalSupply, CSDIEM_DECIMALS)} csDIEM</strong>
             </div>
             <div>
-              <span>Actual APY</span>
-              <strong>{currentApyLabel}</strong>
+              <span>USDC distributed</span>
+              <strong>{formatUsd(totalUsdcDistributed)}</strong>
             </div>
           </div>
         </section>
