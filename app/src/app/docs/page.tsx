@@ -1,10 +1,5 @@
 import { Header } from "@/components/Header";
-import {
-  AUDIT_BRIEF_URL,
-  BASESCAN_ADDRESSES,
-  GITHUB_URL,
-  KNOWN_ISSUES_URL,
-} from "@/config/protocol-links";
+import { BASESCAN_ADDRESSES, GITHUB_URL } from "@/config/protocol-links";
 
 export default function DocsPage() {
   return (
@@ -18,8 +13,8 @@ export default function DocsPage() {
 
           <p>
             Diem Relay is a marketplace that lets DIEM holders earn USDC on their credits.
-            DIEM is a $1 inference credit; when it&apos;s sold as compute, the USDC paid is
-            distributed through RevenueSplitter. This page covers how the marketplace works,
+            Stake your DIEM tokens, let others use the inference credits, and get paid daily
+            in USDC. This page covers how the marketplace works,
             the sDIEM and csDIEM receipts, fees, withdrawals, contracts, and security status.
           </p>
 
@@ -155,22 +150,10 @@ export default function DocsPage() {
 
           <h2>Risks</h2>
 
-          <p>Interacting with the relay involves smart contract risk.</p>
-
           <p>
-            Bretzel and Pashov AI reviewed the original sDIEM and DIEMVault contracts in
-            March 2026, with findings remediated. RevenueSplitter, sDIEM, and csDIEM have
-            in-house adversarial review coverage and are pending external review before
-            meaningful TVL. The upstream repo reports 271 unit, fuzz, invariant, and
-            Base-fork tests green for the current system. Read the{" "}
-            <a href={AUDIT_BRIEF_URL} rel="noreferrer" target="_blank">
-              audit briefing
-            </a>{" "}
-            and{" "}
-            <a href={KNOWN_ISSUES_URL} rel="noreferrer" target="_blank">
-              known issues
-            </a>
-            .
+            Crypto products involve risk, including smart contract bugs, market volatility,
+            protocol changes, wallet mistakes, and loss of funds. This interface is provided
+            as-is and is not financial, legal, or tax advice. Use it at your own risk.
           </p>
         </article>
       </main>

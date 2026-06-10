@@ -326,8 +326,8 @@ export default function PoolPage() {
             <div className="pool-kicker">Staking vault</div>
             <h1 className="pool-title">Stake Diem, earn USDC</h1>
             <p className="pool-subtitle">
-              Put idle DIEM to work. Stake into the vault, back real compute demand,
-              and earn USDC when that compute is sold.
+              Stake your DIEM tokens. Let others use the inference credits.
+              Get paid daily in USDC.
             </p>
           </div>
           <div className="pool-status-card">

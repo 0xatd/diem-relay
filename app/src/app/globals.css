@@ -2125,6 +2125,10 @@ body {
   background: #6f78ff;
 }
 
+.theme-dark .pool-secondary-action {
+  color: #f6f7fb;
+}
+
 .theme-dark .pool-action:hover:not(:disabled) {
   background: #5962eb;
 }
