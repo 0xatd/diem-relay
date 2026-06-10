@@ -16,6 +16,39 @@
   --color-success: #00d4aa;
 }
 
+:root,
+html.dark {
+  --color-gold: #f5a623;
+  --color-gold-hover: #d4911e;
+  --color-gold-muted: rgba(245, 166, 35, 0.1);
+  --color-card: #171821;
+  --color-card-inner: #101118;
+  --color-surface: #0a0a0f;
+  --color-panel: #12121a;
+  --color-panel-inner: #0f1017;
+  --color-border: #2a2d38;
+  --color-ink: #f6f6f8;
+  --color-ink-muted: #b7b7c8;
+  --color-ink-faint: #777790;
+  --color-success: #00d4aa;
+}
+
+html.light {
+  --color-gold: #c87900;
+  --color-gold-hover: #a76400;
+  --color-gold-muted: rgba(200, 121, 0, 0.12);
+  --color-card: #ffffff;
+  --color-card-inner: #f7f3ea;
+  --color-surface: #fbf7ef;
+  --color-panel: #ffffff;
+  --color-panel-inner: #f8f4ec;
+  --color-border: #ded2bf;
+  --color-ink: #191711;
+  --color-ink-muted: #575047;
+  --color-ink-faint: #81786a;
+  --color-success: #008b70;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -30,6 +63,12 @@ body {
     radial-gradient(circle at 20% 0%, rgba(245, 166, 35, 0.12), transparent 34rem),
     linear-gradient(180deg, #101018 0%, var(--color-surface) 34rem);
   color: var(--color-ink);
+}
+
+html.light body {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(200, 121, 0, 0.14), transparent 34rem),
+    linear-gradient(180deg, #fffaf1 0%, var(--color-surface) 34rem);
 }
 
 a {
@@ -56,6 +95,57 @@ input {
 
 .diem-relay-title {
   overflow-wrap: anywhere;
+}
+
+.theme-toggle-track {
+  display: inline-flex;
+  width: 2.1rem;
+  height: 1.15rem;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--color-card-inner);
+  border: 1px solid var(--color-border);
+  padding: 0.12rem;
+}
+
+.theme-toggle-thumb {
+  width: 0.78rem;
+  height: 0.78rem;
+  border-radius: 999px;
+  background: var(--color-gold);
+  transform: translateX(0.82rem);
+  transition: transform 160ms ease;
+}
+
+html.light .theme-toggle-thumb {
+  transform: translateX(0);
+}
+
+html.light .diem-relay-page .text-white,
+html.light .diem-relay-page .text-gray-100,
+html.light .diem-relay-page .text-gray-200 {
+  color: var(--color-ink) !important;
+}
+
+html.light .diem-relay-page .text-gray-400 {
+  color: var(--color-ink-muted) !important;
+}
+
+html.light .diem-relay-page .text-gray-500,
+html.light .diem-relay-page .placeholder\:text-gray-600::placeholder {
+  color: var(--color-ink-faint) !important;
+}
+
+html.light .diem-relay-page .bg-yellow-900\/20 {
+  background-color: rgba(245, 166, 35, 0.12) !important;
+}
+
+html.light .diem-relay-page .text-yellow-300 {
+  color: #855300 !important;
+}
+
+html.light .diem-relay-page .border-yellow-600\/40 {
+  border-color: rgba(200, 121, 0, 0.35) !important;
 }
 
 @media (max-width: 640px) {
@@ -97,4 +187,9 @@ input[type="number"] {
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 4px;
+}
+
+html.light .skeleton {
+  background: linear-gradient(90deg, #f0e7d8 25%, #e1d2bd 50%, #f0e7d8 75%);
+  background-size: 200% 100%;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function Header() {
   return (
@@ -14,11 +15,14 @@ export function Header() {
           <span className="text-xs font-bold uppercase tracking-[0.12em] text-ink-faint">Staking + AI credits</span>
         </span>
       </a>
-      <ConnectButton
-        showBalance={false}
-        chainStatus="icon"
-        accountStatus="address"
-      />
+      <div className="flex shrink-0 items-center gap-2">
+        <ThemeToggle />
+        <ConnectButton
+          showBalance={false}
+          chainStatus="icon"
+          accountStatus="address"
+        />
+      </div>
     </header>
   );
 }
