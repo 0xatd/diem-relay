@@ -136,6 +136,7 @@ export default function PoolPage() {
       { address: sdiem, abi: erc20Abi, functionName: 'allowance', args: [account, csdiem] },
       { address: csdiem, abi: csDiemV2Abi, functionName: 'previewDeposit', args: [parsedDeposit] },
       { address: revenueSplitter, abi: revenueSplitterAbi, functionName: 'totalStakerPaid' },
+      { address: sdiem, abi: sDiemV2Abi, functionName: 'veniceCooldownEnd' },
     ],
     query: { refetchInterval: 20_000 },
   });
@@ -166,6 +167,7 @@ export default function PoolPage() {
   const sdiemToCsAllowance = read<bigint>(19, 0n);
   const convertPreview = read<bigint>(20, 0n);
   const totalUsdcDistributed = read<bigint>(21, 0n);
+  const veniceCooldownEnd = read<bigint>(22, 0n);
   const circulatingSdiemSupply =
     sdiemTotalSupply > sdiemWrappedSupply ? sdiemTotalSupply - sdiemWrappedSupply : 0n;
   const withdrawUsesCsdiem = withdrawMode !== 'liquid';
@@ -190,6 +192,21 @@ export default function PoolPage() {
   const withdrawalStart = withdrawalRequest[1] ?? 0n;
   const withdrawalReadyAt = withdrawalStart + DAY_SECONDS;
   const withdrawalWait = secondsUntil(withdrawalReadyAt);
+  const veniceWait = secondsUntil(veniceCooldownEnd);
+  const withdrawalStatus = canCompleteWithdraw
+    ? 'ready'
+    : withdrawalWait > 0n
+      ? `${formatDuration(withdrawalWait)} left`
+      : veniceWait > 0n
+        ? `Venice cooldown: ${formatDuration(veniceWait)} left`
+        : 'Waiting for vault liquidity';
+  const withdrawalSummaryStatus = canCompleteWithdraw
+    ? 'Ready to complete'
+    : withdrawalWait > 0n
+      ? `${formatDuration(withdrawalWait)} remaining`
+      : veniceWait > 0n
+        ? `Venice cooldown: ${formatDuration(veniceWait)} remaining`
+        : 'Waiting for vault liquidity';
 
   const connectedLabel = useMemo(() => {
     if (!isConnected || !address) return 'Wallet not connected';
@@ -555,8 +572,7 @@ export default function PoolPage() {
                         <div className="pool-preview-row">
                           <span>Queued</span>
                           <strong>
-                            {formatToken(withdrawalAmount)} DIEM -{' '}
-                            {canCompleteWithdraw ? 'ready' : `${formatDuration(withdrawalWait)} left`}
+                            {formatToken(withdrawalAmount)} DIEM - {withdrawalStatus}
                           </strong>
                         </div>
                       )}
@@ -624,7 +640,7 @@ export default function PoolPage() {
                     <div>
                       <span>Pending withdrawal</span>
                       <strong>{formatToken(withdrawalAmount)} DIEM</strong>
-                      <small>{canCompleteWithdraw ? 'Ready to complete' : `${formatDuration(withdrawalWait)} remaining`}</small>
+                      <small>{withdrawalSummaryStatus}</small>
                     </div>
                     <button
                       className="pool-secondary-action"
