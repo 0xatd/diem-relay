@@ -37,6 +37,24 @@ const relayEndpoints = [
   { label: "Chat", value: "POST /v1/chat/completions" },
 ];
 
+const poweredBy = [
+  {
+    name: "CheapTokens.ai",
+    description: "discounted inference credits",
+    href: "https://cheaptokens.ai",
+  },
+  {
+    name: "Venice.ai",
+    description: "private AI infrastructure",
+    href: "https://venice.ai",
+  },
+  {
+    name: "DIEMpool.com",
+    description: "staking interface lineage",
+    href: "https://diempool.com",
+  },
+];
+
 export default function Home() {
   const sdiem = useSDiem();
   const apr = calcSDiemApr(sdiem.rewardRate, sdiem.totalStaked);
@@ -105,6 +123,24 @@ export default function Home() {
               <p className="mt-2 text-xl font-black text-white">{stat.value}</p>
             </div>
           ))}
+        </section>
+
+        <section className="py-8">
+          <p className="text-center text-xs font-bold uppercase tracking-[0.16em] text-gold">Powered by</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {poweredBy.map((partner) => (
+              <a
+                key={partner.name}
+                href={partner.href}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg border border-border bg-panel p-5 text-center transition hover:border-gold/50 hover:bg-panel-inner"
+              >
+                <h2 className="text-lg font-black text-white">{partner.name}</h2>
+                <p className="mt-1 text-sm leading-6 text-ink-muted">{partner.description}</p>
+              </a>
+            ))}
+          </div>
         </section>
 
         <section id="stake" className="grid gap-6 py-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(360px,0.58fr)] lg:items-start">
