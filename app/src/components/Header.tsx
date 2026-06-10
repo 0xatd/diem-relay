@@ -7,19 +7,25 @@ export function Header() {
     <header className="site-header">
       <div className="site-header-left">
         <a className="site-logo" href="/">
-          <span className="site-logo-icon">◇</span>
-          <span className="site-logo-text">DIEMpool</span>
+          <span className="site-logo-icon">◆</span>
+          <span className="site-logo-text">Diem Relay</span>
         </a>
         <nav className="site-nav">
           <a className="site-nav-link site-nav-link-active" href="/">
-            Supply DIEM
+            Stake
+          </a>
+          <a className="site-nav-link" href="#earnings">
+            Earnings
+          </a>
+          <a className="site-nav-link" href="#activity">
+            Activity
           </a>
           <a
             className="site-nav-link"
             href="https://cheaptokens.ai/buy"
             rel="noopener noreferrer"
           >
-            Buy Inference
+            Buy inference
           </a>
         </nav>
       </div>

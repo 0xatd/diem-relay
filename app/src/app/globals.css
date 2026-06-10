@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 * {
   box-sizing: border-box;
@@ -1263,5 +1263,636 @@ body {
 
   .pool-token-tabs button span {
     font-size: 13px;
+  }
+}
+
+/* Diem Relay handoff theme: light, institutional staking dashboard. */
+body {
+  background: #fbfbfd;
+  color: #191c28;
+  font-family: 'Hanken Grotesk', 'Inter', system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+.site-header {
+  background: rgba(255, 255, 255, 0.88);
+  border-bottom: 1px solid #e7e8ef;
+  color: #191c28;
+  gap: 28px;
+  height: 64px;
+  padding: 0 36px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(8px);
+}
+
+.site-logo-icon {
+  color: #4a52e0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.site-logo-text {
+  color: #191c28;
+  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.site-nav-link {
+  border-radius: 8px;
+  color: #5a6072;
+  font-size: 14px;
+  padding: 7px 12px;
+}
+
+.site-nav-link:hover,
+.site-nav-link-active {
+  background: #f6f7fb;
+  color: #191c28;
+}
+
+.site-header-right [data-rk] button,
+.site-header-right button {
+  border-radius: 10px !important;
+  font-family: 'Hanken Grotesk', system-ui, sans-serif !important;
+  font-weight: 800 !important;
+}
+
+.pool-page {
+  background:
+    radial-gradient(900px 420px at 78% -8%, #eef0fe 0%, rgba(238, 240, 254, 0) 60%),
+    #fbfbfd;
+  color: #191c28;
+  min-height: calc(100vh - 64px);
+  padding: 34px 36px 44px;
+}
+
+.pool-shell {
+  max-width: 1380px;
+}
+
+.pool-hero {
+  align-items: end;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 26px;
+}
+
+.pool-hero-copy {
+  padding: 0;
+}
+
+.pool-kicker {
+  color: #9298a8;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.pool-title {
+  color: #191c28;
+  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.08;
+}
+
+.pool-subtitle {
+  color: #5a6072;
+  font-size: 14.5px;
+  line-height: 1.5;
+  max-width: 520px;
+}
+
+.pool-status-card,
+.pool-panel,
+.pool-stat,
+.pool-mechanics-strip div {
+  background: #ffffff;
+  border: 1px solid #e7e8ef;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.pool-primary-panel {
+  box-shadow: 0 24px 60px -34px rgba(40, 44, 90, 0.42);
+}
+
+.pool-status-card {
+  min-width: 220px;
+  padding: 16px 20px;
+}
+
+.pool-status-card span,
+.pool-panel-copy,
+.pool-stat span,
+.pool-mechanics-strip span,
+.pool-input-meta,
+.pool-empty-state,
+.pool-preview-row,
+.pool-position-row {
+  color: #5a6072;
+}
+
+.pool-status-card strong {
+  color: #4a52e0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.pool-status-card small {
+  color: #16915a;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.pool-app-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 380px);
+  gap: 20px;
+}
+
+.pool-panel-header {
+  border-bottom: 1px solid #eef0f5;
+  padding: 22px 24px 10px;
+}
+
+.pool-panel-title {
+  color: #191c28;
+  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.pool-action-tabs {
+  background: #f6f7fb;
+  border: 0;
+  border-radius: 11px;
+  display: inline-grid;
+  gap: 4px;
+  grid-template-columns: 1fr 1fr;
+  margin: 24px 24px 0;
+  padding: 4px;
+}
+
+.pool-action-tabs button {
+  border: 0;
+  border-radius: 8px;
+  color: #5a6072;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 800;
+  min-width: 120px;
+  padding: 8px 18px;
+}
+
+.pool-action-tabs .pool-action-tab-active {
+  background: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(20, 22, 40, 0.08);
+  color: #191c28;
+}
+
+.pool-token-tabs {
+  gap: 10px;
+  padding: 12px 24px 8px;
+}
+
+.pool-token-tabs button {
+  background: #ffffff;
+  border: 1.5px solid #e7e8ef;
+  border-radius: 12px;
+  color: #191c28;
+  min-height: 124px;
+  padding: 15px 16px;
+  transition: background 0.14s, border-color 0.14s;
+}
+
+.pool-token-tabs button:hover {
+  border-color: #9298a8;
+}
+
+.pool-token-tabs strong {
+  color: #191c28;
+  font-size: 14px;
+}
+
+.pool-token-tabs span {
+  color: #5a6072;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.pool-token-tabs .pool-token-tab-active {
+  background: #edeefe;
+  border-color: #4a52e0;
+}
+
+.pool-connect,
+.pool-empty-state {
+  background: #f6f7fb;
+  border: 1px dashed #d7dae6;
+  border-radius: 12px;
+}
+
+.pool-input-row {
+  background: #ffffff;
+  border: 1px solid #e7e8ef;
+  border-radius: 12px;
+}
+
+.pool-input-row:focus-within {
+  border-color: #4a52e0;
+  box-shadow: 0 0 0 3px #edeefe;
+}
+
+.pool-input-row-large {
+  margin: 12px 24px;
+  padding: 16px 18px;
+}
+
+.pool-input {
+  color: #191c28;
+  font-size: 28px;
+}
+
+.pool-input::placeholder {
+  color: #9298a8;
+}
+
+.pool-small-button {
+  background: #edeefe;
+  border: 1px solid #edeefe;
+  border-radius: 7px;
+  color: #4a52e0;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+}
+
+.pool-token {
+  border: 1px solid #e7e8ef;
+  border-radius: 9px;
+  color: #191c28;
+  font-size: 13.5px;
+  font-weight: 800;
+  padding: 8px 12px;
+}
+
+.pool-preview {
+  border-top: 1px solid #eef0f5;
+}
+
+.pool-preview-quiet {
+  margin-left: 24px;
+  margin-right: 24px;
+}
+
+.pool-preview-row strong,
+.pool-position-row strong {
+  color: #191c28;
+}
+
+.pool-action {
+  background: #4a52e0;
+  border-radius: 12px;
+  color: #ffffff;
+  font-family: inherit;
+  font-weight: 800;
+  height: 52px;
+  margin-top: 22px;
+}
+
+.pool-action:hover:not(:disabled) {
+  background: #3a41c4;
+}
+
+.pool-action:disabled {
+  background: #f6f7fb;
+  color: #9298a8;
+  opacity: 1;
+}
+
+.pool-form-main > .pool-action,
+.pool-secondary-action-full {
+  margin-left: 24px;
+  margin-right: 24px;
+  width: calc(100% - 48px);
+}
+
+.pool-secondary-action {
+  background: #f6f7fb;
+  border: 1px solid #e7e8ef;
+  border-radius: 9px;
+  color: #191c28;
+  font-family: inherit;
+}
+
+.pool-tx {
+  background: #e6f5ee;
+  border-color: #cfeadd;
+  color: #16915a;
+}
+
+.pool-tx-main {
+  margin: 0 24px 24px;
+}
+
+.pool-position-panel {
+  overflow: hidden;
+}
+
+.pool-balance-grid {
+  gap: 10px;
+  padding: 18px;
+}
+
+.pool-balance-grid div {
+  background: #f6f7fb;
+  border: 1px solid #eef0f5;
+  border-radius: 12px;
+}
+
+.pool-balance-grid span,
+.pool-pending-card span,
+.pool-rewards-card span {
+  color: #9298a8;
+}
+
+.pool-balance-grid strong,
+.pool-pending-card strong,
+.pool-rewards-card strong {
+  color: #191c28;
+}
+
+.pool-pending-card,
+.pool-rewards-card {
+  border-color: #eef0f5;
+}
+
+.pool-pending-card small {
+  color: #16915a;
+}
+
+.pool-rewards-card {
+  background: #e6f5ee;
+  border: 1px solid #cfeadd;
+  border-radius: 12px;
+  margin: 0 18px 18px;
+}
+
+.pool-stats {
+  gap: 20px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: 22px;
+}
+
+.pool-stat {
+  padding: 20px;
+}
+
+.pool-stat span {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.pool-stat strong {
+  color: #191c28;
+  font-size: 16px;
+}
+
+.pool-mechanics-strip {
+  gap: 20px;
+  margin-top: 22px;
+}
+
+.pool-mechanics-strip div {
+  padding: 20px;
+}
+
+.pool-mechanics-strip strong {
+  color: #191c28;
+}
+
+.pool-powered-by {
+  background: #ffffff;
+  border: 1px solid #e7e8ef;
+  border-radius: 14px;
+  margin-top: 20px;
+  padding: 18px 20px;
+}
+
+.pool-powered-by > span {
+  color: #9298a8;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.pool-powered-links a {
+  background: #f6f7fb;
+  border: 1px solid #eef0f5;
+  border-radius: 12px;
+  color: #191c28;
+}
+
+.pool-powered-links a:hover {
+  background: #edeefe;
+  border-color: #4a52e0;
+}
+
+.pool-powered-links strong {
+  color: #191c28;
+  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+}
+
+.pool-powered-links small {
+  color: #5a6072;
+}
+
+@media (max-width: 920px) {
+  .site-header {
+    height: auto;
+    padding: 14px 18px;
+  }
+
+  .site-header-left {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .site-nav {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .site-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pool-page {
+    overflow-x: hidden;
+    padding: 26px 18px 38px;
+  }
+
+  .pool-hero,
+  .pool-app-grid,
+  .pool-stats,
+  .pool-mechanics-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .pool-status-card {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .pool-shell,
+  .pool-hero,
+  .pool-app-grid,
+  .pool-stats,
+  .pool-mechanics-strip,
+  .pool-powered-by,
+  .pool-panel,
+  .pool-status-card,
+  .pool-subtitle,
+  .pool-panel-copy {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  .pool-title {
+    font-size: 30px;
+    max-width: 100% !important;
+    overflow-wrap: break-word;
+  }
+
+  .pool-action-tabs,
+  .pool-token-tabs,
+  .pool-input-row-large,
+  .pool-preview-quiet,
+  .pool-empty-state-large,
+  .pool-form-main > .pool-action,
+  .pool-secondary-action-full {
+    max-width: calc(100% - 48px) !important;
+    width: calc(100% - 48px) !important;
+  }
+
+  .pool-token-tabs-three,
+  .pool-powered-links {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 560px) {
+  body,
+  #__next,
+  .pool-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .site-header {
+    overflow: hidden;
+  }
+
+  .site-nav {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .pool-page {
+    box-sizing: border-box;
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+  }
+
+  .pool-shell,
+  .pool-hero,
+  .pool-app-grid,
+  .pool-stats,
+  .pool-mechanics-strip,
+  .pool-powered-by,
+  .pool-panel,
+  .pool-status-card {
+    max-width: calc(100vw - 36px) !important;
+    width: calc(100vw - 36px) !important;
+  }
+
+  .pool-title {
+    font-size: 25px !important;
+    line-height: 1.08;
+    max-width: 100% !important;
+  }
+
+  .pool-subtitle {
+    font-size: 14px !important;
+  }
+
+  .pool-subtitle,
+  .pool-panel-copy,
+  .pool-token-tabs span,
+  .pool-mechanics-strip span {
+    max-width: 100% !important;
+    width: auto !important;
+  }
+
+  .pool-action-tabs,
+  .pool-token-tabs,
+  .pool-input-row-large,
+  .pool-preview-quiet,
+  .pool-empty-state-large,
+  .pool-form-main > .pool-action,
+  .pool-secondary-action-full {
+    margin-left: 16px !important;
+    margin-right: 16px !important;
+    max-width: calc(100% - 32px) !important;
+    width: calc(100% - 32px) !important;
+  }
+
+  .pool-token-tabs button,
+  .pool-stat,
+  .pool-mechanics-strip div {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  .pool-action-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .pool-token-tabs-three,
+  .pool-powered-links {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pool-token-tabs button {
+    min-height: auto;
+  }
+
+  .pool-panel-header,
+  .pool-form,
+  .pool-balance-grid,
+  .pool-rewards-card,
+  .pool-pending-card {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .pool-input-line {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pool-token {
+    grid-column: 1 / -1;
+    width: max-content;
   }
 }

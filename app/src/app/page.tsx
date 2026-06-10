@@ -303,17 +303,17 @@ export default function PoolPage() {
       <div className="pool-shell">
         <section className="pool-hero pool-hero-compact">
           <div>
-            <div className="pool-kicker">DIEM Relay v2 vault</div>
-            <h1 className="pool-title">Supply DIEM</h1>
+            <div className="pool-kicker">Staking vault - V2</div>
+            <h1 className="pool-title">Stake Diem, earn the demand</h1>
             <p className="pool-subtitle">
-              Connect a wallet to supply, track rewards, and withdraw. sDIEM is the liquid staking
-              receipt; csDIEM is the compounding vault receipt.
+              Every Diem is a perpetual $1 inference credit. Supply yours to the pool and collect
+              USDC each time someone buys a day of compute.
             </p>
           </div>
           <div className="pool-status-card">
-            <span>Current APY</span>
+            <span>Net APY</span>
             <strong>{currentApyLabel}</strong>
-            <small>{sdiemPaused || csdiemPaused ? 'Vault paused' : 'Vault live'}</small>
+            <small>{sdiemPaused || csdiemPaused ? 'Vault paused' : 'Paid in USDC'}</small>
           </div>
         </section>
 
@@ -341,7 +341,7 @@ export default function PoolPage() {
                 <div className="pool-panel-header pool-inline-header">
                   <div>
                     <h2 className="pool-panel-title">Supply DIEM</h2>
-                    <p className="pool-panel-copy">Stake for sDIEM, convert existing sDIEM to csDIEM, or enter the compounding vault directly from DIEM.</p>
+                    <p className="pool-panel-copy">Choose liquid sDIEM rewards or the csDIEM compounding vault.</p>
                   </div>
                 </div>
 
@@ -352,7 +352,7 @@ export default function PoolPage() {
                     type="button"
                   >
                     <strong>sDIEM</strong>
-                    <span>Liquid staking + claimable USDC</span>
+                    <span>Stay liquid and claim USDC manually as rewards stream in.</span>
                   </button>
                   <button
                     className={mode === 'convert' ? 'pool-token-tab-active' : ''}
@@ -360,7 +360,7 @@ export default function PoolPage() {
                     type="button"
                   >
                     <strong>Convert sDIEM</strong>
-                    <span>Move sDIEM into the compounding vault</span>
+                    <span>Move existing sDIEM into hands-off compounding.</span>
                   </button>
                   <button
                     className={mode === 'direct' ? 'pool-token-tab-active' : ''}
@@ -368,7 +368,7 @@ export default function PoolPage() {
                     type="button"
                   >
                     <strong>Enter csDIEM</strong>
-                    <span>Supply DIEM into the compounding vault</span>
+                    <span>Supply DIEM directly into the compounding vault.</span>
                   </button>
                 </div>
 
@@ -684,7 +684,7 @@ export default function PoolPage() {
         </section>
 
         <section className="pool-mechanics-strip">
-          <div>
+          <div id="earnings">
             <strong>sDIEM</strong>
             <span>Liquid staking receipt. Accrues claimable USDC rewards.</span>
           </div>
@@ -692,7 +692,7 @@ export default function PoolPage() {
             <strong>csDIEM</strong>
             <span>Compounding vault receipt. Rewards accrue through the csDIEM exchange rate.</span>
           </div>
-          <div>
+          <div id="activity">
             <strong>Withdrawals</strong>
             <span>sDIEM withdraws to DIEM after the 24h cooldown. csDIEM converts to sDIEM first.</span>
           </div>
