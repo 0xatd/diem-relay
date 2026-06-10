@@ -2231,7 +2231,8 @@ body {
   margin-top: 16px;
 }
 
-.content-page ul {
+.content-page ul,
+.content-page ol {
   display: grid;
   gap: 10px;
   margin: 0 0 18px 20px;
