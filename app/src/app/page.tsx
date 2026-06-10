@@ -122,10 +122,11 @@ export default function PoolPage() {
       { address: sdiem, abi: sDiemV2Abi, functionName: 'withdrawalRequests', args: [account] },
       { address: sdiem, abi: sDiemV2Abi, functionName: 'canCompleteWithdraw', args: [account] },
       { address: sdiem, abi: sDiemV2Abi, functionName: 'totalStaked' },
+      { address: sdiem, abi: sDiemV2Abi, functionName: 'totalSupply' },
+      { address: sdiem, abi: sDiemV2Abi, functionName: 'balanceOf', args: [csdiem] },
       { address: sdiem, abi: sDiemV2Abi, functionName: 'rewardRate' },
       { address: sdiem, abi: sDiemV2Abi, functionName: 'periodFinish' },
       { address: sdiem, abi: sDiemV2Abi, functionName: 'paused' },
-      { address: csdiem, abi: csDiemV2Abi, functionName: 'totalAssets' },
       { address: csdiem, abi: csDiemV2Abi, functionName: 'totalSupply' },
       { address: csdiem, abi: csDiemV2Abi, functionName: 'balanceOf', args: [account] },
       { address: csdiem, abi: csDiemV2Abi, functionName: 'convertToAssets', args: [parseUnits('1', 18)] },
@@ -151,19 +152,22 @@ export default function PoolPage() {
   const withdrawalRequest = read<readonly [bigint, bigint]>(5, [0n, 0n]);
   const canCompleteWithdraw = read<boolean>(6, false);
   const totalStaked = read<bigint>(7, 0n);
-  const rewardRate = read<bigint>(8, 0n);
-  const periodFinish = read<bigint>(9, 0n);
-  const sdiemPaused = read<boolean>(10, false);
-  const csTotalAssets = read<bigint>(11, 0n);
-  const csTotalSupply = read<bigint>(12, 0n);
-  const csBalance = read<bigint>(13, 0n);
-  const csSharePrice = read<bigint>(14, parseUnits('1', 18));
-  const redeemPreview = read<bigint>(15, 0n);
-  const maxRedeem = read<bigint>(16, 0n);
-  const csdiemPaused = read<boolean>(17, false);
-  const sdiemToCsAllowance = read<bigint>(18, 0n);
-  const convertPreview = read<bigint>(19, 0n);
-  const totalUsdcDistributed = read<bigint>(20, 0n);
+  const sdiemTotalSupply = read<bigint>(8, 0n);
+  const sdiemWrappedSupply = read<bigint>(9, 0n);
+  const rewardRate = read<bigint>(10, 0n);
+  const periodFinish = read<bigint>(11, 0n);
+  const sdiemPaused = read<boolean>(12, false);
+  const csTotalSupply = read<bigint>(13, 0n);
+  const csBalance = read<bigint>(14, 0n);
+  const csSharePrice = read<bigint>(15, parseUnits('1', 18));
+  const redeemPreview = read<bigint>(16, 0n);
+  const maxRedeem = read<bigint>(17, 0n);
+  const csdiemPaused = read<boolean>(18, false);
+  const sdiemToCsAllowance = read<bigint>(19, 0n);
+  const convertPreview = read<bigint>(20, 0n);
+  const totalUsdcDistributed = read<bigint>(21, 0n);
+  const circulatingSdiemSupply =
+    sdiemTotalSupply > sdiemWrappedSupply ? sdiemTotalSupply - sdiemWrappedSupply : 0n;
   const withdrawUsesCsdiem = withdrawMode !== 'liquid';
   const withdrawInputAmount = withdrawUsesCsdiem ? redeemAmount : withdrawAmount;
   const parsedWithdrawInput = withdrawUsesCsdiem ? parsedRedeem : parsedWithdraw;
@@ -673,8 +677,8 @@ export default function PoolPage() {
               <strong>{formatToken(totalStaked)} DIEM</strong>
             </div>
             <div>
-              <span>DIEM in csDIEM vault</span>
-              <strong>{formatToken(csTotalAssets)} DIEM</strong>
+              <span>sDIEM supply</span>
+              <strong>{formatToken(circulatingSdiemSupply)} sDIEM</strong>
             </div>
             <div>
               <span>csDIEM supply</span>
