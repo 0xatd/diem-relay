@@ -18,6 +18,9 @@ export function Header() {
           <a className="site-nav-link" href="#earnings">
             Earnings
           </a>
+          <a className="site-nav-link" href="#csdiem">
+            csDIEM
+          </a>
           <a className="site-nav-link" href="#activity">
             Activity
           </a>

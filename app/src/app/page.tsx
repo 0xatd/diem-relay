@@ -317,6 +317,24 @@ export default function PoolPage() {
           </div>
         </section>
 
+        <section className="pool-token-primer" aria-label="DIEM staking mechanics">
+          <div>
+            <span>DIEM</span>
+            <strong>$1 inference credit</strong>
+            <p>Base asset supplied to the relay. Demand comes from compute buyers using Diem as prepaid inference.</p>
+          </div>
+          <div id="earnings">
+            <span>sDIEM</span>
+            <strong>Liquid staking receipt</strong>
+            <p>Stake DIEM, keep a liquid receipt, and claim streamed USDC rewards manually.</p>
+          </div>
+          <div id="csdiem">
+            <span>csDIEM</span>
+            <strong>Auto-compounding vault</strong>
+            <p>Wrap sDIEM or supply DIEM directly. Rewards compound into the csDIEM exchange rate.</p>
+          </div>
+        </section>
+
         <section className="pool-app-grid">
           <div className="pool-panel pool-primary-panel">
             <div className="pool-action-tabs">
@@ -341,7 +359,10 @@ export default function PoolPage() {
                 <div className="pool-panel-header pool-inline-header">
                   <div>
                     <h2 className="pool-panel-title">Supply DIEM</h2>
-                    <p className="pool-panel-copy">Choose liquid sDIEM rewards or the csDIEM compounding vault.</p>
+                    <p className="pool-panel-copy">
+                      Choose liquid sDIEM rewards, convert existing sDIEM to csDIEM, or enter the
+                      compounding vault directly from DIEM.
+                    </p>
                   </div>
                 </div>
 
@@ -352,7 +373,7 @@ export default function PoolPage() {
                     type="button"
                   >
                     <strong>sDIEM</strong>
-                    <span>Stay liquid and claim USDC manually as rewards stream in.</span>
+                    <span>Liquid staking receipt. Stay liquid and claim streamed USDC rewards manually.</span>
                   </button>
                   <button
                     className={mode === 'convert' ? 'pool-token-tab-active' : ''}
@@ -360,7 +381,7 @@ export default function PoolPage() {
                     type="button"
                   >
                     <strong>Convert sDIEM</strong>
-                    <span>Move existing sDIEM into hands-off compounding.</span>
+                    <span>Move existing sDIEM into csDIEM without leaving the staking system.</span>
                   </button>
                   <button
                     className={mode === 'direct' ? 'pool-token-tab-active' : ''}
@@ -368,7 +389,7 @@ export default function PoolPage() {
                     type="button"
                   >
                     <strong>Enter csDIEM</strong>
-                    <span>Supply DIEM directly into the compounding vault.</span>
+                    <span>Supply DIEM directly into auto-compounding csDIEM.</span>
                   </button>
                 </div>
 
@@ -684,13 +705,13 @@ export default function PoolPage() {
         </section>
 
         <section className="pool-mechanics-strip">
-          <div id="earnings">
+          <div>
             <strong>sDIEM</strong>
             <span>Liquid staking receipt. Accrues claimable USDC rewards.</span>
           </div>
           <div>
             <strong>csDIEM</strong>
-            <span>Compounding vault receipt. Rewards accrue through the csDIEM exchange rate.</span>
+            <span>ERC-4626 compounding vault receipt. Rewards accrue through the csDIEM exchange rate.</span>
           </div>
           <div id="activity">
             <strong>Withdrawals</strong>

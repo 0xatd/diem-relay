@@ -1455,6 +1455,50 @@ body {
   letter-spacing: 0.08em;
 }
 
+.pool-token-primer {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: -4px 0 22px;
+}
+
+.pool-token-primer div {
+  background: #ffffff;
+  border: 1px solid #e7e8ef;
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+
+.pool-token-primer span,
+.pool-token-primer strong,
+.pool-token-primer p {
+  display: block;
+}
+
+.pool-token-primer span {
+  color: #4a52e0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pool-token-primer strong {
+  color: #191c28;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin-top: 8px;
+}
+
+.pool-token-primer p {
+  color: #5a6072;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 8px;
+}
+
 .pool-app-grid {
   grid-template-columns: minmax(0, 1fr) minmax(340px, 380px);
   gap: 20px;
@@ -1813,6 +1857,7 @@ body {
 .theme-dark .pool-panel,
 .theme-dark .pool-stat,
 .theme-dark .pool-mechanics-strip div,
+.theme-dark .pool-token-primer div,
 .theme-dark .pool-powered-by,
 .theme-dark .pool-input-row,
 .theme-dark .pool-token-tabs button,
@@ -1829,6 +1874,7 @@ body {
 .theme-dark .pool-panel-copy,
 .theme-dark .pool-stat span,
 .theme-dark .pool-mechanics-strip span,
+.theme-dark .pool-token-primer p,
 .theme-dark .pool-input-meta,
 .theme-dark .pool-empty-state,
 .theme-dark .pool-preview-row,
@@ -1845,9 +1891,14 @@ body {
 
 .theme-dark .pool-status-card strong,
 .theme-dark .pool-kicker,
+.theme-dark .pool-token-primer span,
 .theme-dark .site-logo-icon,
 .theme-dark .pool-small-button {
   color: #8f96ff;
+}
+
+.theme-dark .pool-token-primer strong {
+  color: #f6f7fb;
 }
 
 .theme-dark .pool-panel-header,
@@ -1923,6 +1974,7 @@ body {
   .pool-hero,
   .pool-app-grid,
   .pool-stats,
+  .pool-token-primer,
   .pool-mechanics-strip {
     grid-template-columns: 1fr;
   }
@@ -1938,6 +1990,7 @@ body {
   .pool-app-grid,
   .pool-stats,
   .pool-mechanics-strip,
+  .pool-token-primer,
   .pool-powered-by,
   .pool-panel,
   .pool-status-card,
@@ -1999,6 +2052,7 @@ body {
   .pool-app-grid,
   .pool-stats,
   .pool-mechanics-strip,
+  .pool-token-primer,
   .pool-powered-by,
   .pool-panel,
   .pool-status-card {
@@ -2039,6 +2093,7 @@ body {
 
   .pool-token-tabs button,
   .pool-stat,
+  .pool-token-primer div,
   .pool-mechanics-strip div {
     max-width: 100% !important;
     width: 100% !important;
