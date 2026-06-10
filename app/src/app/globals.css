@@ -1535,7 +1535,8 @@ body {
   color: #5a6072;
   font-size: 14.5px;
   line-height: 1.5;
-  max-width: 520px;
+  max-width: 760px;
+  white-space: nowrap;
 }
 
 .pool-status-card,
@@ -2179,6 +2180,10 @@ body {
 
   .pool-status-card {
     width: 100%;
+  }
+
+  .pool-subtitle {
+    white-space: normal;
   }
 }
 
