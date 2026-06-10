@@ -270,6 +270,7 @@ export const sDiemV2Abi = [
   },
   { type: "function", name: "canCompleteWithdraw", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "bool" }], stateMutability: "view" },
   { type: "function", name: "veniceCooldownEnd", inputs: [], outputs: [{ name: "", type: "uint256" }], stateMutability: "view" },
+  { type: "function", name: "totalPendingNotInitiated", inputs: [], outputs: [{ name: "", type: "uint256" }], stateMutability: "view" },
   { type: "function", name: "WITHDRAWAL_DELAY", inputs: [], outputs: [{ name: "", type: "uint256" }], stateMutability: "view" },
   { type: "function", name: "MIN_WITHDRAW", inputs: [], outputs: [{ name: "", type: "uint256" }], stateMutability: "view" },
 ] as const;

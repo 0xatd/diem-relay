@@ -158,6 +158,7 @@ export default function PoolPage() {
       { address: sdiem, abi: sDiemV2Abi, functionName: 'veniceCooldownEnd' },
       { address: diem, abi: erc20Abi, functionName: 'balanceOf', args: [sdiem] },
       { address: diem, abi: erc20Abi, functionName: 'stakedInfos', args: [sdiem] },
+      { address: sdiem, abi: sDiemV2Abi, functionName: 'totalPendingNotInitiated' },
     ],
     query: { refetchInterval: 20_000 },
   });
@@ -191,6 +192,7 @@ export default function PoolPage() {
   const veniceCooldownEnd = read<bigint>(22, 0n);
   const vaultLiquidDiem = read<bigint>(23, 0n);
   const vaultStakedInfo = read<readonly [bigint, bigint, bigint]>(24, [0n, 0n, 0n]);
+  const vaultUninitiatedDiem = read<bigint>(25, 0n);
   const vaultVenicePendingDiem = vaultStakedInfo[2] ?? 0n;
   const circulatingSdiemSupply =
     sdiemTotalSupply > sdiemWrappedSupply ? sdiemTotalSupply - sdiemWrappedSupply : 0n;
@@ -235,6 +237,13 @@ export default function PoolPage() {
   const remainingAfterNextClaim = withdrawalAmount > nextClaimableDiem
     ? withdrawalAmount - nextClaimableDiem
     : 0n;
+  const nextBatchStatus = remainingAfterNextClaim === 0n
+    ? ''
+    : nextClaimableDiem > 0n && vaultUninitiatedDiem > 0n
+      ? 'Next batch starts unlocking after claim'
+      : veniceWait > 0n
+        ? `Next batch unlocking: ${formatDuration(veniceWait)} left`
+        : 'Next batch waiting for vault liquidity';
   const withdrawalStatus = nextClaimableDiem >= withdrawalAmount && withdrawalAmount > 0n
     ? 'Ready to claim'
     : nextClaimableDiem > 0n
@@ -242,7 +251,7 @@ export default function PoolPage() {
     : withdrawalWait > 0n
       ? `Request timer: ${formatDuration(withdrawalWait)} left`
       : veniceWait > 0n
-        ? `Venice cooldown: ${formatDuration(veniceWait)} left`
+        ? `Next batch unlocking: ${formatDuration(veniceWait)} left`
         : 'Waiting for vault liquidity';
   const withdrawalSummaryStatus = nextClaimableDiem >= withdrawalAmount && withdrawalAmount > 0n
     ? 'Ready to claim'
@@ -251,7 +260,7 @@ export default function PoolPage() {
     : withdrawalWait > 0n
       ? `Request timer: ${formatDuration(withdrawalWait)} remaining`
       : veniceWait > 0n
-        ? `Venice cooldown: ${formatDuration(veniceWait)} remaining`
+        ? `Next batch unlocking: ${formatDuration(veniceWait)} remaining`
         : 'Waiting for vault liquidity';
 
   const connectedLabel = useMemo(() => {
@@ -645,7 +654,7 @@ export default function PoolPage() {
                       {withdrawalAmount > 0n && nextClaimableDiem > 0n && remainingAfterNextClaim > 0n && (
                         <div className="pool-preview-row">
                           <span>After claiming</span>
-                          <strong>{formatToken(remainingAfterNextClaim)} DIEM stays queued</strong>
+                          <strong>{formatToken(remainingAfterNextClaim)} DIEM stays queued · {nextBatchStatus}</strong>
                         </div>
                       )}
                     </div>
@@ -819,6 +828,7 @@ export default function PoolPage() {
                         <div>
                           <span>Still queued</span>
                           <strong>{formatToken(remainingAfterNextClaim)} DIEM</strong>
+                          {nextBatchStatus && <small>{nextBatchStatus}</small>}
                         </div>
                         <div>
                           <span>Request ready</span>
