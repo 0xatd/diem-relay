@@ -162,10 +162,7 @@ export default function PoolPage() {
   const usdcPerDiemDay = totalStaked > 0n ? (dailyReward * parseUnits('1', 18)) / totalStaked : 0n;
   const rewardStreamActive = dailyReward > 0n && totalStaked > 0n && secondsUntil(periodFinish) > 0n;
   const currentApyLabel = rewardStreamActive ? formatApy(usdcPerDiemDay) : 'APY pending';
-  const sharePriceLabel =
-    csTotalSupply > 0n ? `1 csDIEM = ${formatToken(csSharePrice)} sDIEM` : 'Vault opening';
   const dailyRewardLabel = dailyReward > 0n ? `${formatUsd(dailyReward)}/day` : 'Not streaming';
-  const rewardPeriodLabel = periodFinish > 0n ? `${formatDuration(secondsUntil(periodFinish))} left` : 'Inactive';
   const withdrawalAmount = withdrawalRequest[0] ?? 0n;
   const withdrawalStart = withdrawalRequest[1] ?? 0n;
   const withdrawalReadyAt = withdrawalStart + DAY_SECONDS;
@@ -314,24 +311,6 @@ export default function PoolPage() {
             <span>Net APY</span>
             <strong>{currentApyLabel}</strong>
             <small>{sdiemPaused || csdiemPaused ? 'Vault paused' : 'Paid in USDC'}</small>
-          </div>
-        </section>
-
-        <section className="pool-token-primer" aria-label="DIEM staking mechanics">
-          <div>
-            <span>DIEM</span>
-            <strong>$1 inference credit</strong>
-            <p>Base asset supplied to the relay. Demand comes from compute buyers using Diem as prepaid inference.</p>
-          </div>
-          <div id="earnings">
-            <span>sDIEM</span>
-            <strong>Liquid staking receipt</strong>
-            <p>Stake DIEM, keep a liquid receipt, and claim streamed USDC rewards manually.</p>
-          </div>
-          <div id="csdiem">
-            <span>csDIEM</span>
-            <strong>Auto-compounding vault</strong>
-            <p>Wrap sDIEM or supply DIEM directly. Rewards compound into the csDIEM exchange rate.</p>
           </div>
         </section>
 
@@ -681,61 +660,14 @@ export default function PoolPage() {
           </aside>
         </section>
 
-        <section className="pool-stats pool-stats-tight">
-          <div className="pool-stat">
-            <span>Total supplied</span>
-            <strong>{formatToken(totalStaked)} DIEM</strong>
-          </div>
-          <div className="pool-stat">
-            <span>Rewards</span>
-            <strong>{dailyRewardLabel}</strong>
-          </div>
-          <div className="pool-stat">
-            <span>Per DIEM / day</span>
-            <strong>{formatUsd(usdcPerDiemDay, 5)}</strong>
-          </div>
-          <div className="pool-stat">
-            <span>csDIEM</span>
-            <strong>{sharePriceLabel}</strong>
-          </div>
-          <div className="pool-stat">
-            <span>Reward period</span>
-            <strong>{rewardPeriodLabel}</strong>
-          </div>
-        </section>
-
-        <section className="pool-mechanics-strip">
-          <div>
-            <strong>sDIEM</strong>
-            <span>Liquid staking receipt. Accrues claimable USDC rewards.</span>
-          </div>
-          <div>
-            <strong>csDIEM</strong>
-            <span>ERC-4626 compounding vault receipt. Rewards accrue through the csDIEM exchange rate.</span>
-          </div>
-          <div id="activity">
-            <strong>Withdrawals</strong>
-            <span>sDIEM withdraws to DIEM after the 24h cooldown. csDIEM converts to sDIEM first.</span>
-          </div>
-        </section>
-
-        <section className="pool-powered-by" aria-label="Powered by">
-          <span>Powered by</span>
-          <div className="pool-powered-links">
-            <a href="https://cheaptokens.ai" target="_blank" rel="noreferrer">
-              <strong>CheapTokens.ai</strong>
-              <small>discounted inference credits</small>
-            </a>
-            <a href="https://venice.ai" target="_blank" rel="noreferrer">
-              <strong>Venice.ai</strong>
-              <small>private AI infrastructure</small>
-            </a>
-            <a href="https://diempool.com" target="_blank" rel="noreferrer">
-              <strong>DIEMpool.com</strong>
-              <small>staking interface lineage</small>
-            </a>
-          </div>
-        </section>
+        <footer className="pool-links-footer">
+          <a href="/docs">Docs</a>
+          <a href="/about">About</a>
+          {/* TODO: Diem Relay GitHub URL */}
+          <a href="#">GitHub</a>
+          {/* TODO: contracts URL */}
+          <a href="#">Contracts (BaseScan)</a>
+        </footer>
       </div>
       </div>
     </>

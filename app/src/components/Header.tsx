@@ -1,9 +1,12 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function Header() {
+  const pathname = usePathname();
+
   return (
     <header className="site-header">
       <div className="site-header-left">
@@ -12,8 +15,14 @@ export function Header() {
           <span className="site-logo-text">Diem Relay</span>
         </a>
         <nav className="site-nav">
-          <a className="site-nav-link site-nav-link-active" href="/">
+          <a className={`site-nav-link${pathname === "/" ? " site-nav-link-active" : ""}`} href="/">
             Stake
+          </a>
+          <a className={`site-nav-link${pathname === "/about" ? " site-nav-link-active" : ""}`} href="/about">
+            About
+          </a>
+          <a className={`site-nav-link${pathname === "/docs" ? " site-nav-link-active" : ""}`} href="/docs">
+            Docs
           </a>
           <a
             className="site-nav-link"
