@@ -239,11 +239,17 @@ body {
 }
 
 .pool-status-card small {
-  color: #d7d7df;
+  background: linear-gradient(135deg, #4a52e0, #8f96ff);
+  border: 1px solid #6f78ff;
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-block;
   font-size: 12px;
   font-weight: 800;
   margin-top: 7px;
+  padding: 4px 8px;
   text-transform: uppercase;
+  width: fit-content;
 }
 
 .pool-subtitle {
@@ -1604,9 +1610,15 @@ body {
 }
 
 .pool-status-card small {
-  color: #16915a;
+  background: linear-gradient(135deg, #4a52e0, #8f96ff);
+  border: 1px solid #6f78ff;
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-block;
   font-size: 11px;
   letter-spacing: 0.08em;
+  padding: 4px 8px;
+  width: fit-content;
 }
 
 .pool-token-primer {

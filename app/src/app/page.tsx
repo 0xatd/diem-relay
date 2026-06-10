@@ -425,7 +425,7 @@ export default function PoolPage() {
           <div className="pool-status-card">
             <span>Net APY</span>
             <strong>{currentApyLabel}</strong>
-            <small>{sdiemPaused || csdiemPaused ? 'Vault paused' : 'Base - paid in USDC'}</small>
+            <small>{sdiemPaused || csdiemPaused ? 'Vault paused' : 'Paid in USDC on Base'}</small>
           </div>
         </section>
 
