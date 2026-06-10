@@ -321,8 +321,8 @@ export default function PoolPage() {
             <div className="pool-kicker">Staking vault</div>
             <h1 className="pool-title">Stake Diem, earn USDC</h1>
             <p className="pool-subtitle">
-              DIEM is forward-staked for Venice compute. Customer USDC flows through
-              RevenueSplitter: 80% streams to suppliers and 20% goes to the protocol Safe.
+              Put idle DIEM to work. Stake into the vault, back real compute demand,
+              and earn USDC when that compute is sold.
             </p>
           </div>
           <div className="pool-status-card">
