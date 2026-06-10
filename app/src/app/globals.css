@@ -794,11 +794,16 @@ body {
 }
 
 .pool-pending-card {
+  align-items: center;
   border-bottom: 1px solid #2a2a3a;
   display: flex;
   gap: 12px;
   justify-content: space-between;
   padding: 18px;
+}
+
+.pool-pending-main {
+  min-width: 0;
 }
 
 .pool-pending-card span,
@@ -825,31 +830,6 @@ body {
   color: #c8fff4;
   font-size: 12px;
   margin-top: 4px;
-}
-
-.pool-pending-breakdown {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: 12px;
-  max-width: 320px;
-}
-
-.pool-pending-breakdown div {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-
-.pool-pending-breakdown span {
-  font-size: 10px;
-}
-
-.pool-pending-breakdown strong {
-  font-size: 13px;
-  margin-top: 3px;
-  text-align: left;
 }
 
 .pool-balance-grid div {
@@ -1283,6 +1263,12 @@ body {
   .pool-token-tabs {
     padding-left: 0;
     padding-right: 0;
+  }
+
+  .pool-action-tabs button {
+    min-width: 0;
+    padding-left: 8px;
+    padding-right: 8px;
   }
 
   .pool-panel-header,
@@ -1904,11 +1890,6 @@ body {
   color: #16915a;
 }
 
-.pool-pending-breakdown div {
-  background: #f6f7fb;
-  border-color: #eef0f5;
-}
-
 .pool-rewards-card {
   background: #e6f5ee;
   border: 1px solid #cfeadd;
@@ -2509,5 +2490,57 @@ body {
 
   .content-page h1 {
     font-size: 28px;
+  }
+}
+
+@media (max-width: 560px) {
+  .pool-page {
+    overflow-x: hidden;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .pool-shell,
+  .pool-panel,
+  .pool-primary-panel,
+  .pool-position-panel {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .pool-app-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pool-action-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    margin-left: 16px !important;
+    margin-right: 16px !important;
+    max-width: min(300px, calc(100vw - 48px)) !important;
+    overflow: hidden;
+    width: min(300px, calc(100vw - 48px)) !important;
+  }
+
+  .pool-action-tabs button {
+    font-size: 12px;
+    min-width: 0 !important;
+    padding: 8px 4px;
+  }
+
+  .pool-token-tabs {
+    grid-template-columns: minmax(0, 1fr) !important;
+    margin-left: 16px !important;
+    margin-right: 16px !important;
+    max-width: calc(100vw - 68px) !important;
+    width: calc(100vw - 68px) !important;
+  }
+
+  .pool-token-tabs button {
+    min-width: 0 !important;
+    max-width: min(260px, calc(100vw - 96px)) !important;
+    width: min(260px, calc(100vw - 96px)) !important;
   }
 }
