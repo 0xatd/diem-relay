@@ -43,13 +43,13 @@ export default function DocsPage() {
             representing your position.
           </p>
 
-          <h2>v2 live contracts</h2>
+          <h2>Live contracts</h2>
 
           <p>
-            The current live staking system is v2, deployed on Base on May 21, 2026. sDIEM v2
-            is a transferable ERC-20 receipt with EIP-2612 permit and reward checkpointing on
-            transfers. csDIEM v2 is a canonical ERC-4626 wrapper over sDIEM v2, with standard
-            synchronous redeem support and a direct DIEM deposit zap.
+            The live staking system is deployed on Base. sDIEM is a transferable ERC-20
+            receipt with EIP-2612 permit and reward checkpointing on transfers. csDIEM is a
+            canonical ERC-4626 wrapper over sDIEM, with synchronous redeem support and a
+            direct DIEM deposit zap.
           </p>
 
           <h2>Fees</h2>
@@ -79,7 +79,7 @@ export default function DocsPage() {
           <h2>sDIEM — liquid staking</h2>
 
           <p>
-            Supply DIEM and you receive sDIEM, a liquid receipt for your position. sDIEM v2
+            Supply DIEM and you receive sDIEM, a liquid receipt for your position. sDIEM
             accrues claimable USDC rewards you collect manually, and stays transferable so you
             keep flexibility — hold it, move it, or wrap it into the compounding vault. The
             withdrawal queue is per address and does not transfer with sDIEM.
@@ -121,13 +121,13 @@ export default function DocsPage() {
               </a>
             </li>
             <li>
-              sDIEM v2 — transferable liquid staking receipt —{" "}
+              sDIEM — transferable liquid staking receipt —{" "}
               <a href={BASESCAN_ADDRESSES.sdiemV2} rel="noreferrer" target="_blank">
                 0x8065228a8156590A8BFca30678394e9db91f80Ee
               </a>
             </li>
             <li>
-              csDIEM v2 — ERC-4626 compounding vault —{" "}
+              csDIEM — ERC-4626 compounding vault —{" "}
               <a href={BASESCAN_ADDRESSES.csdiemV2} rel="noreferrer" target="_blank">
                 0x78B8726929911044748374178CB2D417A54319e5
               </a>
@@ -146,23 +146,6 @@ export default function DocsPage() {
             </li>
           </ul>
 
-          <p>Legacy v1 staking addresses remain relevant for existing LP exits:</p>
-
-          <ul>
-            <li>
-              sDIEM v1 —{" "}
-              <a href={BASESCAN_ADDRESSES.sdiemV1} rel="noreferrer" target="_blank">
-                0xdbF05AF4fdAA518AC9c4dc5aA49399b8dd0B4be2
-              </a>
-            </li>
-            <li>
-              csDIEM v1 —{" "}
-              <a href={BASESCAN_ADDRESSES.csdiemV1} rel="noreferrer" target="_blank">
-                0x4899f5fBA1bf43C8Bea483bE6342e55Bc16e045a
-              </a>
-            </li>
-          </ul>
-
           <p>
             Source code:{" "}
             <a href={GITHUB_URL} rel="noreferrer" target="_blank">
@@ -176,10 +159,10 @@ export default function DocsPage() {
 
           <p>
             Bretzel and Pashov AI reviewed the original sDIEM and DIEMVault contracts in
-            March 2026, with findings remediated. RevenueSplitter, csDIEM, sDIEM v2, and
-            csDIEM v2 have in-house adversarial review coverage and are pending external
-            review before meaningful TVL. The upstream repo reports 271 unit, fuzz,
-            invariant, and Base-fork tests green for the current system. Read the{" "}
+            March 2026, with findings remediated. RevenueSplitter, sDIEM, and csDIEM have
+            in-house adversarial review coverage and are pending external review before
+            meaningful TVL. The upstream repo reports 271 unit, fuzz, invariant, and
+            Base-fork tests green for the current system. Read the{" "}
             <a href={AUDIT_BRIEF_URL} rel="noreferrer" target="_blank">
               audit briefing
             </a>{" "}

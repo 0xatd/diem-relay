@@ -307,7 +307,7 @@ export default function PoolPage() {
       <div className="pool-shell">
         <section className="pool-hero pool-hero-compact">
           <div>
-            <div className="pool-kicker">Staking vault - V2</div>
+            <div className="pool-kicker">Staking vault</div>
             <h1 className="pool-title">Stake Diem, earn USDC</h1>
             <p className="pool-subtitle">
               DIEM is forward-staked for Venice compute. Customer USDC flows through
@@ -317,7 +317,7 @@ export default function PoolPage() {
           <div className="pool-status-card">
             <span>Net APY</span>
             <strong>{currentApyLabel}</strong>
-            <small>{sdiemPaused || csdiemPaused ? 'Vault paused' : 'V2 on Base - paid in USDC'}</small>
+            <small>{sdiemPaused || csdiemPaused ? 'Vault paused' : 'Base - paid in USDC'}</small>
           </div>
         </section>
 

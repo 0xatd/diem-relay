@@ -16,8 +16,8 @@ export function PortfolioSummary() {
 
   if (!isConnected) return null;
 
-  const sLabel = isV2 ? "Staked (sDIEM v2)" : "Staked (sDIEM)";
-  const csLabel = isV2 ? "Wrapped (csDIEM v2)" : "Wrapped (csDIEM)";
+  const sLabel = "Staked (sDIEM)";
+  const csLabel = "Wrapped (csDIEM)";
   const csAvailable = isV2 || isCSDiemDeployed;
 
   const stats = [

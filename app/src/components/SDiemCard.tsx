@@ -47,9 +47,9 @@ const CSDIEM_TOOLTIP_V1 = (
 
 const CSDIEM_TOOLTIP_V2 = (
   <>
-    <strong className="text-accent">csDIEM v2</strong> is the canonical
-    ERC-4626 wrapper over sDIEM v2. Share price grows as USDC rewards are
-    harvested and re-staked into DIEM. Synchronous redeem returns sDIEM v2
+    <strong className="text-accent">csDIEM</strong> is the canonical
+    ERC-4626 wrapper over sDIEM. Share price grows as USDC rewards are
+    harvested and re-staked into DIEM. Synchronous redeem returns sDIEM
     (then exit through sDIEM&apos;s 24h queue to get raw DIEM).
   </>
 );
@@ -390,8 +390,8 @@ export function SDiemCard() {
         <p className="text-xs leading-relaxed text-gray-400">
           {isV2 ? (
             <>
-              <strong className="text-accent">csDIEM v2</strong> is the
-              canonical ERC-4626 wrapper over sDIEM v2 that auto-compounds USDC
+              <strong className="text-accent">csDIEM</strong> is the
+              canonical ERC-4626 wrapper over sDIEM that auto-compounds USDC
               rewards into DIEM. Use it as ERC-20 collateral, in LPs, or in
               Pendle / Morpho / Spectra / Silo.
             </>
@@ -464,7 +464,7 @@ export function SDiemCard() {
           )}
           {isV2 && (
             <p className="text-[11px] leading-relaxed text-gray-500">
-              Zaps raw DIEM straight into csDIEM v2 (stakes into sDIEM v2
+              Zaps raw DIEM straight into csDIEM (stakes into sDIEM
               internally). No 24h delay.
             </p>
           )}
@@ -495,11 +495,11 @@ export function SDiemCard() {
         {isV2 && (
           <div className="space-y-2 rounded-lg border border-border bg-card-inner p-3">
             <p className="text-xs font-medium text-gray-300">
-              Wrap sDIEM v2 → csDIEM v2
+              Wrap sDIEM → csDIEM
             </p>
             <p className="text-[11px] leading-relaxed text-gray-500">
-              Already staking sDIEM v2? Wrap it directly — atomic, no 24h
-              delay. Rewards accrued by your sDIEM v2 stay with the position.
+              Already staking sDIEM? Wrap it directly — atomic, no 24h
+              delay. Rewards accrued by your sDIEM stay with the position.
             </p>
             <AmountInput
               value={wrapSDiemAmt}
@@ -509,9 +509,9 @@ export function SDiemCard() {
             />
             {sdiemAsToken.allowance < UNLIMITED_THRESHOLD && (
               <p className="text-[10px] text-gray-500">
-                Current sDIEM v2 allowance:{" "}
+                Current sDIEM allowance:{" "}
                 <span className="font-mono text-gray-400">
-                  {formatDiem(sdiemAsToken.allowance)} sDIEM v2
+                  {formatDiem(sdiemAsToken.allowance)} sDIEM
                 </span>
               </p>
             )}
@@ -519,7 +519,7 @@ export function SDiemCard() {
               needsApproval={wrapSDiemNeedsApproval}
               onApprove={() => sdiemToCsdiemApproval.approve()}
               onAction={handleWrapSDiem}
-              actionLabel="Wrap sDIEM v2"
+              actionLabel="Wrap sDIEM"
               disabled={
                 !wrapSDiemAmt ||
                 wrapSDiemAmt === "0" ||
@@ -552,8 +552,8 @@ export function SDiemCard() {
           </p>
           {isV2 && (
             <p className="text-[11px] leading-relaxed text-gray-500">
-              Atomic, one tx — returns sDIEM v2 to your wallet immediately.
-              To exit to raw DIEM, then withdraw the sDIEM v2 on the Withdraw
+              Atomic, one tx — returns sDIEM to your wallet immediately.
+              To exit to raw DIEM, then withdraw the sDIEM on the Withdraw
               tab (24h Venice cooldown).
             </p>
           )}
@@ -618,7 +618,7 @@ export function SDiemCard() {
 
   return (
     <VaultCard
-      title={isV2 ? "sDIEM v2" : "sDIEM"}
+      title="sDIEM"
       subtitle="Stake DIEM, earn USDC"
       badge={apr !== null ? `${apr.toFixed(2)}% APR` : undefined}
     >
