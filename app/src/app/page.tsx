@@ -23,9 +23,10 @@ import {
 } from '@/config/protocol-links';
 
 
-type SupplyMode = 'liquid' | 'convert' | 'direct';
-type ActionMode = 'supply' | 'withdraw';
-type WithdrawMode = 'liquid' | 'unwrap' | 'exit';
+type SupplyMode = 'liquid' | 'direct';
+type ActionMode = 'supply' | 'withdraw' | 'convert';
+type ConvertMode = 'wrap' | 'unwrap';
+type WithdrawMode = 'liquid' | 'exit';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address;
 const DAY_SECONDS = 86_400n;
@@ -113,6 +114,7 @@ export default function PoolPage() {
   const { switchChain, isPending: isSwitching } = useSwitchChain();
   const [actionMode, setActionMode] = useState<ActionMode>('supply');
   const [mode, setMode] = useState<SupplyMode>('liquid');
+  const [convertMode, setConvertMode] = useState<ConvertMode>('wrap');
   const [withdrawMode, setWithdrawMode] = useState<WithdrawMode>('liquid');
   const [depositAmount, setDepositAmount] = useState('');
   const [redeemAmount, setRedeemAmount] = useState('');
@@ -193,6 +195,7 @@ export default function PoolPage() {
   const circulatingSdiemSupply =
     sdiemTotalSupply > sdiemWrappedSupply ? sdiemTotalSupply - sdiemWrappedSupply : 0n;
   const withdrawUsesCsdiem = withdrawMode !== 'liquid';
+  const convertUsesCsdiem = convertMode === 'unwrap';
   const withdrawInputAmount = withdrawUsesCsdiem ? redeemAmount : withdrawAmount;
   const parsedWithdrawInput = withdrawUsesCsdiem ? parsedRedeem : parsedWithdraw;
   const withdrawBalance = withdrawUsesCsdiem ? maxRedeem : sdiemBalance;
@@ -200,11 +203,19 @@ export default function PoolPage() {
   const withdrawBalanceLabel = withdrawUsesCsdiem
     ? formatToken(withdrawBalance, CSDIEM_DECIMALS)
     : formatToken(withdrawBalance);
-  const depositToken = mode === 'convert' ? 'sDIEM' : 'DIEM';
-  const depositBalance = mode === 'convert' ? sdiemBalance : diemBalance;
-  const activeAllowance = mode === 'convert' ? sdiemToCsAllowance : mode === 'direct' ? csAllowance : sAllowance;
-  const approvalToken = mode === 'convert' ? sdiem : diem;
+  const convertInputAmount = convertUsesCsdiem ? redeemAmount : depositAmount;
+  const parsedConvertInput = convertUsesCsdiem ? parsedRedeem : parsedDeposit;
+  const convertBalance = convertUsesCsdiem ? maxRedeem : sdiemBalance;
+  const convertToken = convertUsesCsdiem ? 'csDIEM' : 'sDIEM';
+  const convertBalanceLabel = convertUsesCsdiem
+    ? formatToken(convertBalance, CSDIEM_DECIMALS)
+    : formatToken(convertBalance);
+  const depositToken = 'DIEM';
+  const depositBalance = diemBalance;
+  const activeAllowance = mode === 'direct' ? csAllowance : sAllowance;
+  const approvalToken = diem;
   const needsApproval = parsedDeposit > 0n && parsedDeposit > activeAllowance;
+  const convertNeedsApproval = convertMode === 'wrap' && parsedDeposit > 0n && parsedDeposit > sdiemToCsAllowance;
 
   const dailyReward = rewardRate * DAY_SECONDS;
   const usdcPerDiemDay = totalStaked > 0n ? (dailyReward * parseUnits('1', 18)) / totalStaked : 0n;
@@ -283,6 +294,17 @@ export default function PoolPage() {
           : parsedWithdrawInput > withdrawBalance
             ? `Insufficient ${withdrawToken}`
             : '';
+  const convertDisableReason = !isConnected
+    ? 'Connect wallet'
+    : !isBase
+      ? 'Switch to Base'
+      : csdiemPaused
+        ? 'Conversion paused'
+        : parsedConvertInput <= 0n
+          ? 'Enter amount'
+          : parsedConvertInput > convertBalance
+            ? `Insufficient ${convertToken}`
+            : '';
 
   const handlePrimaryAction = () => {
     if (!isConnected) return;
@@ -304,15 +326,6 @@ export default function PoolPage() {
         address: csdiem,
         abi: csDiemV2Abi,
         functionName: 'depositDIEM',
-        args: [parsedDeposit, account],
-      });
-      return;
-    }
-    if (mode === 'convert') {
-      writeContract({
-        address: csdiem,
-        abi: csDiemV2Abi,
-        functionName: 'deposit',
         args: [parsedDeposit, account],
       });
       return;
@@ -358,6 +371,33 @@ export default function PoolPage() {
       return;
     }
     handleRequestWithdraw();
+  };
+
+  const handleConvertAction = () => {
+    if (!isConnected) return;
+    if (!isBase) {
+      switchChain({ chainId: base.id });
+      return;
+    }
+    if (convertMode === 'wrap') {
+      if (convertNeedsApproval) {
+        writeContract({
+          address: sdiem,
+          abi: erc20Abi,
+          functionName: 'approve',
+          args: [csdiem, parsedDeposit],
+        });
+        return;
+      }
+      writeContract({
+        address: csdiem,
+        abi: csDiemV2Abi,
+        functionName: 'deposit',
+        args: [parsedDeposit, account],
+      });
+      return;
+    }
+    handleRedeem();
   };
 
   const handleCompleteWithdraw = () => {
@@ -406,6 +446,13 @@ export default function PoolPage() {
               >
                 Withdraw
               </button>
+              <button
+                className={actionMode === 'convert' ? 'pool-action-tab-active' : ''}
+                onClick={() => setActionMode('convert')}
+                type="button"
+              >
+                Convert
+              </button>
             </div>
 
             {actionMode === 'supply' ? (
@@ -414,13 +461,13 @@ export default function PoolPage() {
                   <div>
                     <h2 className="pool-panel-title">Supply DIEM</h2>
                     <p className="pool-panel-copy">
-                      Choose transferable sDIEM rewards, convert existing sDIEM, or enter the
-                      canonical ERC-4626 csDIEM vault directly from DIEM.
+                      Choose transferable sDIEM rewards or enter the canonical ERC-4626 csDIEM
+                      vault directly from DIEM.
                     </p>
                   </div>
                 </div>
 
-                <div className="pool-token-tabs pool-token-tabs-three">
+                <div className="pool-token-tabs">
                   <button
                     className={mode === 'liquid' ? 'pool-token-tab-active' : ''}
                     onClick={() => setMode('liquid')}
@@ -428,14 +475,6 @@ export default function PoolPage() {
                   >
                     <strong>sDIEM</strong>
                     <span>Transferable ERC-20 receipt with EIP-2612 permit. Claim streamed USDC manually.</span>
-                  </button>
-                  <button
-                    className={mode === 'convert' ? 'pool-token-tab-active' : ''}
-                    onClick={() => setMode('convert')}
-                    type="button"
-                  >
-                    <strong>Convert sDIEM</strong>
-                    <span>Move existing sDIEM into csDIEM without leaving the staking system.</span>
                   </button>
                   <button
                     className={mode === 'direct' ? 'pool-token-tab-active' : ''}
@@ -481,9 +520,7 @@ export default function PoolPage() {
                         <strong>
                           {mode === 'liquid'
                             ? 'sDIEM'
-                            : mode === 'convert'
-                              ? `${formatToken(convertPreview, CSDIEM_DECIMALS)} csDIEM`
-                              : 'csDIEM'}
+                            : 'csDIEM'}
                         </strong>
                       </div>
                       <div className="pool-preview-row">
@@ -509,23 +546,21 @@ export default function PoolPage() {
                           : disableReason ||
                             (mode === 'liquid'
                               ? 'Supply DIEM'
-                              : mode === 'convert'
-                                ? 'Convert to csDIEM'
-                                : 'Supply as csDIEM')}
+                              : 'Supply as csDIEM')}
                     </button>
                   </>
                 )}
               </div>
-            ) : (
+            ) : actionMode === 'withdraw' ? (
               <div className="pool-form pool-form-main">
                 <div className="pool-panel-header pool-inline-header">
                   <div>
                     <h2 className="pool-panel-title">Withdraw DIEM</h2>
-                    <p className="pool-panel-copy">Pick the exit path. sDIEM queues a Venice cooldown; csDIEM converts back to sDIEM first.</p>
+                    <p className="pool-panel-copy">Pick the exit path. sDIEM queues a Venice cooldown; csDIEM exits back through sDIEM first.</p>
                   </div>
                 </div>
 
-                <div className="pool-token-tabs pool-token-tabs-three">
+                <div className="pool-token-tabs">
                   <button
                     className={withdrawMode === 'liquid' ? 'pool-token-tab-active' : ''}
                     onClick={() => setWithdrawMode('liquid')}
@@ -533,14 +568,6 @@ export default function PoolPage() {
                   >
                     <strong>sDIEM</strong>
                     <span>Request DIEM withdrawal after the cooldown</span>
-                  </button>
-                  <button
-                    className={withdrawMode === 'unwrap' ? 'pool-token-tab-active' : ''}
-                    onClick={() => setWithdrawMode('unwrap')}
-                    type="button"
-                  >
-                    <strong>Convert csDIEM</strong>
-                    <span>Move csDIEM back to sDIEM</span>
                   </button>
                   <button
                     className={withdrawMode === 'exit' ? 'pool-token-tab-active' : ''}
@@ -598,9 +625,7 @@ export default function PoolPage() {
                         <strong>
                           {withdrawMode === 'exit'
                             ? 'Then request DIEM withdrawal'
-                            : withdrawMode === 'unwrap'
-                              ? 'Hold sDIEM or withdraw DIEM'
-                              : 'Complete after 24h'}
+                            : 'Complete after 24h'}
                         </strong>
                       </div>
                       {withdrawalAmount > 0n && (
@@ -636,9 +661,7 @@ export default function PoolPage() {
                         : withdrawDisableReason ||
                           (withdrawMode === 'exit'
                             ? 'Start exit: convert csDIEM'
-                            : withdrawMode === 'unwrap'
-                              ? 'Convert to sDIEM'
-                              : 'Request withdrawal')}
+                            : 'Request withdrawal')}
                     </button>
 
                     {withdrawalAmount > 0n && (
@@ -651,6 +674,105 @@ export default function PoolPage() {
                         {canCompleteWithdraw ? 'Claim available DIEM' : 'Cancel queued withdrawal'}
                       </button>
                     )}
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="pool-form pool-form-main">
+                <div className="pool-panel-header pool-inline-header">
+                  <div>
+                    <h2 className="pool-panel-title">Convert</h2>
+                    <p className="pool-panel-copy">Move between liquid sDIEM and auto-compounding csDIEM without leaving the vault.</p>
+                  </div>
+                </div>
+
+                <div className="pool-token-tabs">
+                  <button
+                    className={convertMode === 'wrap' ? 'pool-token-tab-active' : ''}
+                    onClick={() => setConvertMode('wrap')}
+                    type="button"
+                  >
+                    <strong>sDIEM to csDIEM</strong>
+                    <span>Compound future USDC into the csDIEM share price</span>
+                  </button>
+                  <button
+                    className={convertMode === 'unwrap' ? 'pool-token-tab-active' : ''}
+                    onClick={() => setConvertMode('unwrap')}
+                    type="button"
+                  >
+                    <strong>csDIEM to sDIEM</strong>
+                    <span>Return to liquid sDIEM before claiming or withdrawing</span>
+                  </button>
+                </div>
+
+                {!isConnected ? (
+                  <div className="pool-connect">Connect a wallet to convert DIEM receipts.</div>
+                ) : (
+                  <>
+                    <div className="pool-input-row pool-input-row-large">
+                      <div className="pool-input-meta">
+                        <span>Convert amount</span>
+                        <span>Balance: {convertBalanceLabel} {convertToken}</span>
+                      </div>
+                      <div className="pool-input-line">
+                        <input
+                          className="pool-input"
+                          inputMode="decimal"
+                          onChange={(event) =>
+                            convertUsesCsdiem
+                              ? setRedeemAmount(event.target.value)
+                              : setDepositAmount(event.target.value)
+                          }
+                          placeholder="0.0"
+                          value={convertInputAmount}
+                        />
+                        <button
+                          className="pool-small-button"
+                          onClick={() =>
+                            convertUsesCsdiem
+                              ? setRedeemAmount(formatUnits(maxRedeem, CSDIEM_DECIMALS))
+                              : setDepositAmount(formatUnits(sdiemBalance, 18))
+                          }
+                          type="button"
+                        >
+                          MAX
+                        </button>
+                        <span className="pool-token">{convertToken}</span>
+                      </div>
+                    </div>
+
+                    <div className="pool-preview pool-preview-quiet">
+                      <div className="pool-preview-row">
+                        <span>You receive</span>
+                        <strong>
+                          {convertMode === 'wrap'
+                            ? `${formatToken(convertPreview, CSDIEM_DECIMALS)} csDIEM`
+                            : `${formatToken(redeemPreview)} sDIEM`}
+                        </strong>
+                      </div>
+                      <div className="pool-preview-row">
+                        <span>Rewards</span>
+                        <strong>{convertMode === 'wrap' ? 'Auto-compound in csDIEM' : 'Claim USDC manually from sDIEM'}</strong>
+                      </div>
+                      <div className="pool-preview-row">
+                        <span>Current APY</span>
+                        <strong>{currentApyLabel}</strong>
+                      </div>
+                    </div>
+
+                    <button
+                      className="pool-action"
+                      disabled={isBusy || (!!convertDisableReason && convertDisableReason !== 'Switch to Base') || (isBase && convertNeedsApproval && parsedDeposit <= 0n)}
+                      onClick={handleConvertAction}
+                      type="button"
+                    >
+                      {!isBase && isConnected
+                        ? 'Switch to Base'
+                        : convertNeedsApproval
+                          ? 'Approve sDIEM'
+                          : convertDisableReason ||
+                            (convertMode === 'wrap' ? 'Convert to csDIEM' : 'Convert to sDIEM')}
+                    </button>
                   </>
                 )}
               </div>

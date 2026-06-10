@@ -343,7 +343,7 @@ body {
 
 .pool-action-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   padding: 12px;
   border-bottom: 1px solid #2a2a3a;
@@ -1677,7 +1677,7 @@ body {
   border-radius: 11px;
   display: inline-grid;
   gap: 4px;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 24px 24px 0;
   padding: 4px;
 }
@@ -2338,7 +2338,13 @@ body {
   }
 
   .pool-action-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .pool-action-tabs button {
+    min-width: 0;
+    padding-left: 8px;
+    padding-right: 8px;
   }
 
   .pool-token-tabs-three,
