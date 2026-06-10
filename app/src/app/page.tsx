@@ -132,7 +132,6 @@ export default function PoolPage() {
       { address: csdiem, abi: csDiemV2Abi, functionName: 'previewRedeem', args: [parsedRedeem] },
       { address: csdiem, abi: csDiemV2Abi, functionName: 'maxRedeem', args: [account] },
       { address: csdiem, abi: csDiemV2Abi, functionName: 'paused' },
-      { address: csdiem, abi: csDiemV2Abi, functionName: 'pendingHarvest' },
       { address: sdiem, abi: erc20Abi, functionName: 'allowance', args: [account, csdiem] },
       { address: csdiem, abi: csDiemV2Abi, functionName: 'previewDeposit', args: [parsedDeposit] },
       { address: revenueSplitter, abi: revenueSplitterAbi, functionName: 'totalStakerPaid' },
@@ -162,10 +161,9 @@ export default function PoolPage() {
   const redeemPreview = read<bigint>(15, 0n);
   const maxRedeem = read<bigint>(16, 0n);
   const csdiemPaused = read<boolean>(17, false);
-  const pendingHarvest = read<bigint>(18, 0n);
-  const sdiemToCsAllowance = read<bigint>(19, 0n);
-  const convertPreview = read<bigint>(20, 0n);
-  const totalUsdcDistributed = read<bigint>(21, 0n);
+  const sdiemToCsAllowance = read<bigint>(18, 0n);
+  const convertPreview = read<bigint>(19, 0n);
+  const totalUsdcDistributed = read<bigint>(20, 0n);
   const withdrawUsesCsdiem = withdrawMode !== 'liquid';
   const withdrawInputAmount = withdrawUsesCsdiem ? redeemAmount : withdrawAmount;
   const parsedWithdrawInput = withdrawUsesCsdiem ? parsedRedeem : parsedWithdraw;
@@ -635,46 +633,29 @@ export default function PoolPage() {
                   </div>
                 )}
 
-                <div className="pool-balance-grid">
-                  <div>
-                    <span>DIEM</span>
-                    <strong>{formatToken(diemBalance)}</strong>
+                <div className="pool-position-summary">
+                  <div className="pool-position-row">
+                    <span>sDIEM balance</span>
+                    <strong>{formatToken(sdiemBalance)} sDIEM</strong>
                   </div>
-                  <div>
-                    <span>sDIEM</span>
-                    <strong>{formatToken(sdiemBalance)}</strong>
+                  <div className="pool-position-row">
+                    <span>csDIEM balance</span>
+                    <strong>{formatToken(csBalance, CSDIEM_DECIMALS)} csDIEM</strong>
                   </div>
-                  <div>
-                    <span>csDIEM</span>
-                    <strong>{formatToken(csBalance, CSDIEM_DECIMALS)}</strong>
+                  <div className="pool-position-row pool-position-row-action">
+                    <div>
+                      <span>Claimable USDC</span>
+                      <strong>{formatUsd(pendingUsdc)}</strong>
+                    </div>
+                    <button
+                      className="pool-secondary-action"
+                      disabled={isBusy || pendingUsdc <= 0n}
+                      onClick={handleClaim}
+                      type="button"
+                    >
+                      Claim
+                    </button>
                   </div>
-                  <div>
-                    <span>csDIEM vault</span>
-                    <strong>{formatToken(csTotalAssets)}</strong>
-                  </div>
-                  <div>
-                    <span>USDC rewards</span>
-                    <strong>{formatUsd(pendingUsdc)}</strong>
-                  </div>
-                  <div>
-                    <span>Pending harvest</span>
-                    <strong>{formatUsd(pendingHarvest)}</strong>
-                  </div>
-                </div>
-
-                <div className="pool-rewards-card">
-                  <div>
-                    <span>Claimable USDC</span>
-                    <strong>{formatUsd(pendingUsdc)}</strong>
-                  </div>
-                  <button
-                    className="pool-secondary-action"
-                    disabled={isBusy || pendingUsdc <= 0n}
-                    onClick={handleClaim}
-                    type="button"
-                  >
-                    Claim
-                  </button>
                 </div>
               </>
             )}

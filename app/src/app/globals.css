@@ -745,6 +745,48 @@ body {
   padding: 18px;
 }
 
+.pool-position-summary {
+  display: grid;
+  gap: 0;
+  padding: 8px 18px 18px;
+}
+
+.pool-position-summary .pool-position-row {
+  align-items: center;
+  border-bottom: 1px solid #2a2a3a;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  min-height: 58px;
+  padding: 13px 0;
+}
+
+.pool-position-summary .pool-position-row:last-child {
+  border-bottom: 0;
+}
+
+.pool-position-row span,
+.pool-position-row strong {
+  display: block;
+}
+
+.pool-position-row span {
+  color: #9b9bae;
+  font-size: 13px;
+}
+
+.pool-position-row strong {
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  margin-top: 3px;
+  text-align: right;
+}
+
+.pool-position-row-action strong {
+  text-align: left;
+}
+
 .pool-pending-card {
   align-items: center;
   border-bottom: 1px solid #2a2a3a;
@@ -1784,6 +1826,18 @@ body {
 .pool-balance-grid {
   gap: 10px;
   padding: 18px;
+}
+
+.pool-position-summary .pool-position-row {
+  border-color: #eef0f5;
+}
+
+.pool-position-row span {
+  color: #9298a8;
+}
+
+.pool-position-row strong {
+  color: #191c28;
 }
 
 .pool-balance-grid div {
