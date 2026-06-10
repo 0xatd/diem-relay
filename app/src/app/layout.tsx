@@ -7,8 +7,8 @@ const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: "DIEMpool",
-  description: "Supply DIEM on Base through the DIEM Relay v2 contracts.",
+  title: "Diem Relay",
+  description: "Stake DIEM on Base and earn USDC from Venice AI compute revenue.",
 };
 
 export default function RootLayout({

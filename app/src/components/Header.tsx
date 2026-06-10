@@ -3,6 +3,7 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { CHEAPTOKENS_BUY_URL } from "@/config/protocol-links";
 
 export function Header() {
   const pathname = usePathname();
@@ -26,8 +27,9 @@ export function Header() {
           </a>
           <a
             className="site-nav-link"
-            href="https://cheaptokens.ai/buy"
+            href={CHEAPTOKENS_BUY_URL}
             rel="noopener noreferrer"
+            target="_blank"
           >
             Buy inference
           </a>

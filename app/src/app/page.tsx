@@ -14,7 +14,13 @@ import { formatUnits, parseUnits, type Address } from 'viem';
 import { Header } from '@/components/Header';
 import { csDiemV2Abi, erc20Abi, sDiemV2Abi } from '@/config/abis';
 import { CSDIEM_V2_ADDRESS, DIEM_TOKEN, SDIEM_V2_ADDRESS } from '@/config/contracts';
-import { CONTRACTS_SECTION_URL, GITHUB_URL } from '@/config/protocol-links';
+import {
+  CHEAPTOKENS_BUY_URL,
+  CONTRACTS_SECTION_URL,
+  DIEMPOOL_URL,
+  GITHUB_URL,
+  VENICE_URL,
+} from '@/config/protocol-links';
 
 
 type SupplyMode = 'liquid' | 'convert' | 'direct';
@@ -304,14 +310,14 @@ export default function PoolPage() {
             <div className="pool-kicker">Staking vault - V2</div>
             <h1 className="pool-title">Stake Diem, earn USDC</h1>
             <p className="pool-subtitle">
-              Every Diem is a perpetual $1 inference credit. Supply yours to the pool and collect
-              USDC each time someone buys a day of compute.
+              DIEM is forward-staked for Venice compute. Customer USDC flows through
+              RevenueSplitter: 80% streams to suppliers and 20% goes to the protocol Safe.
             </p>
           </div>
           <div className="pool-status-card">
             <span>Net APY</span>
             <strong>{currentApyLabel}</strong>
-            <small>{sdiemPaused || csdiemPaused ? 'Vault paused' : 'Paid in USDC'}</small>
+            <small>{sdiemPaused || csdiemPaused ? 'Vault paused' : 'V2 on Base - paid in USDC'}</small>
           </div>
         </section>
 
@@ -340,8 +346,8 @@ export default function PoolPage() {
                   <div>
                     <h2 className="pool-panel-title">Supply DIEM</h2>
                     <p className="pool-panel-copy">
-                      Choose liquid sDIEM rewards, convert existing sDIEM to csDIEM, or enter the
-                      compounding vault directly from DIEM.
+                      Choose transferable sDIEM rewards, convert existing sDIEM, or enter the
+                      canonical ERC-4626 csDIEM vault directly from DIEM.
                     </p>
                   </div>
                 </div>
@@ -353,7 +359,7 @@ export default function PoolPage() {
                     type="button"
                   >
                     <strong>sDIEM</strong>
-                    <span>Liquid staking receipt. Stay liquid and claim streamed USDC rewards manually.</span>
+                    <span>Transferable ERC-20 receipt with EIP-2612 permit. Claim streamed USDC manually.</span>
                   </button>
                   <button
                     className={mode === 'convert' ? 'pool-token-tab-active' : ''}
@@ -369,7 +375,7 @@ export default function PoolPage() {
                     type="button"
                   >
                     <strong>Enter csDIEM</strong>
-                    <span>Supply DIEM directly into auto-compounding csDIEM.</span>
+                    <span>Zap DIEM into csDIEM. Rewards compound into the vault share price.</span>
                   </button>
                 </div>
 
@@ -447,7 +453,7 @@ export default function PoolPage() {
                 <div className="pool-panel-header pool-inline-header">
                   <div>
                     <h2 className="pool-panel-title">Withdraw DIEM</h2>
-                    <p className="pool-panel-copy">Pick the exit path. sDIEM queues a DIEM withdrawal; csDIEM converts back to sDIEM first.</p>
+                    <p className="pool-panel-copy">Pick the exit path. sDIEM queues a Venice cooldown; csDIEM converts back to sDIEM first.</p>
                   </div>
                 </div>
 
@@ -458,7 +464,7 @@ export default function PoolPage() {
                     type="button"
                   >
                     <strong>sDIEM</strong>
-                    <span>Request DIEM withdrawal</span>
+                    <span>Request DIEM withdrawal after the cooldown</span>
                   </button>
                   <button
                     className={withdrawMode === 'unwrap' ? 'pool-token-tab-active' : ''}
@@ -659,6 +665,24 @@ export default function PoolPage() {
               </>
             )}
           </aside>
+        </section>
+
+        <section className="pool-powered-by" aria-label="Powered by">
+          <span>Powered by</span>
+          <div className="pool-powered-links">
+            <a href={CHEAPTOKENS_BUY_URL} rel="noreferrer" target="_blank">
+              <strong>CheapTokens.ai</strong>
+              <small>Discounted inference credits</small>
+            </a>
+            <a href={VENICE_URL} rel="noreferrer" target="_blank">
+              <strong>Venice.ai</strong>
+              <small>Private AI infrastructure</small>
+            </a>
+            <a href={DIEMPOOL_URL} rel="noreferrer" target="_blank">
+              <strong>DIEMpool.com</strong>
+              <small>Staking interface lineage</small>
+            </a>
+          </div>
         </section>
 
         <footer className="pool-links-footer">

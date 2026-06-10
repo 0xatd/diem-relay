@@ -19,15 +19,15 @@ export default function DocsPage() {
           <p>
             Diem Relay is a marketplace that lets DIEM holders earn USDC on their credits.
             DIEM is a $1 inference credit; when it&apos;s sold as compute, the USDC paid is
-            distributed to suppliers, minus a platform fee. This page covers how the
-            marketplace works, the sDIEM and csDIEM receipts, fees, and withdrawals.
+            distributed through RevenueSplitter. This page covers how the marketplace works,
+            the sDIEM and csDIEM receipts, fees, withdrawals, contracts, and security status.
           </p>
 
           <h2>How it works</h2>
 
           <ol>
             <li>Supply DIEM to the pool and receive sDIEM or csDIEM.</li>
-            <li>The pooled DIEM backs AI inference that&apos;s sold to compute buyers.</li>
+            <li>The pooled DIEM is forward-staked on Venice and backs AI inference sold to compute buyers.</li>
             <li>
               USDC from each sale is distributed to suppliers, with a 20% platform fee
               retained by Diem Relay.
@@ -43,36 +43,64 @@ export default function DocsPage() {
             representing your position.
           </p>
 
+          <h2>v2 live contracts</h2>
+
+          <p>
+            The current live staking system is v2, deployed on Base on May 21, 2026. sDIEM v2
+            is a transferable ERC-20 receipt with EIP-2612 permit and reward checkpointing on
+            transfers. csDIEM v2 is a canonical ERC-4626 wrapper over sDIEM v2, with standard
+            synchronous redeem support and a direct DIEM deposit zap.
+          </p>
+
           <h2>Fees</h2>
 
           <p>
             Diem Relay keeps a 20% platform fee on inference revenue. The remaining 80% is
-            distributed to suppliers in USDC, pro-rata to their share of the pool. There is no
-            fee to supply or withdraw beyond network gas.
+            distributed to suppliers in USDC, pro-rata to their share of the pool. The split is
+            hardcoded in RevenueSplitter and requires redeploying the splitter to change. There
+            is no fee to supply or withdraw beyond network gas.
+          </p>
+
+          <h2>Revenue distribution</h2>
+
+          <p>
+            Customer USDC lands on RevenueSplitter. Anyone can call <code>distribute()</code>
+            {" "}once the balance is above the minimum floor and the cooldown has elapsed. The
+            splitter sends 20% to the protocol Safe and forwards 80% to sDIEM through
+            {" "}<code>notifyRewardAmount()</code>, where it streams over 24 hours.
+          </p>
+
+          <p>
+            The project keeper runs daily: first it attempts csDIEM harvest, then it calls
+            RevenueSplitter distribution. Each step has independent skip conditions, so a
+            harvest-side issue does not block the revenue split.
           </p>
 
           <h2>sDIEM — liquid staking</h2>
 
           <p>
-            Supply DIEM and you receive sDIEM, a liquid receipt for your position. sDIEM
+            Supply DIEM and you receive sDIEM, a liquid receipt for your position. sDIEM v2
             accrues claimable USDC rewards you collect manually, and stays transferable so you
-            keep flexibility — hold it, move it, or wrap it into the compounding vault.
+            keep flexibility — hold it, move it, or wrap it into the compounding vault. The
+            withdrawal queue is per address and does not transfer with sDIEM.
           </p>
 
           <h2>csDIEM — compounding vault</h2>
 
           <p>
-            csDIEM is an ERC-4626 vault receipt. Instead of claiming by hand, rewards accrue
-            through the csDIEM exchange rate, so each csDIEM is worth progressively more of the
-            underlying over time. Enter by wrapping existing sDIEM, or by supplying DIEM
-            directly into the vault.
+            csDIEM is an ERC-4626 vault receipt over sDIEM. Instead of claiming by hand,
+            rewards accrue through the csDIEM exchange rate, so each csDIEM is worth
+            progressively more of the underlying over time. Enter by wrapping existing sDIEM,
+            or by supplying DIEM directly into the vault.
           </p>
 
           <h2>Withdrawals</h2>
 
           <p>
-            Withdrawals run through sDIEM. sDIEM withdraws back to DIEM after a 24-hour
-            cooldown. csDIEM unwraps to sDIEM first, then follows the same 24-hour path to DIEM.
+            Withdrawals run through sDIEM. sDIEM withdraws back to DIEM after Venice&apos;s
+            cooldown. The normal path is request, wait about 24 hours, then complete; batched
+            withdrawals can make the practical worst case closer to 48 hours. csDIEM unwraps to
+            sDIEM first, then follows the same path to DIEM.
           </p>
 
           <h2 id="contracts">Contracts</h2>
@@ -93,7 +121,7 @@ export default function DocsPage() {
               </a>
             </li>
             <li>
-              sDIEM v2 — liquid staking receipt —{" "}
+              sDIEM v2 — transferable liquid staking receipt —{" "}
               <a href={BASESCAN_ADDRESSES.sdiemV2} rel="noreferrer" target="_blank">
                 0x8065228a8156590A8BFca30678394e9db91f80Ee
               </a>
@@ -118,6 +146,23 @@ export default function DocsPage() {
             </li>
           </ul>
 
+          <p>Legacy v1 staking addresses remain relevant for existing LP exits:</p>
+
+          <ul>
+            <li>
+              sDIEM v1 —{" "}
+              <a href={BASESCAN_ADDRESSES.sdiemV1} rel="noreferrer" target="_blank">
+                0xdbF05AF4fdAA518AC9c4dc5aA49399b8dd0B4be2
+              </a>
+            </li>
+            <li>
+              csDIEM v1 —{" "}
+              <a href={BASESCAN_ADDRESSES.csdiemV1} rel="noreferrer" target="_blank">
+                0x4899f5fBA1bf43C8Bea483bE6342e55Bc16e045a
+              </a>
+            </li>
+          </ul>
+
           <p>
             Source code:{" "}
             <a href={GITHUB_URL} rel="noreferrer" target="_blank">
@@ -133,7 +178,8 @@ export default function DocsPage() {
             Bretzel and Pashov AI reviewed the original sDIEM and DIEMVault contracts in
             March 2026, with findings remediated. RevenueSplitter, csDIEM, sDIEM v2, and
             csDIEM v2 have in-house adversarial review coverage and are pending external
-            review before meaningful TVL. Read the{" "}
+            review before meaningful TVL. The upstream repo reports 271 unit, fuzz,
+            invariant, and Base-fork tests green for the current system. Read the{" "}
             <a href={AUDIT_BRIEF_URL} rel="noreferrer" target="_blank">
               audit briefing
             </a>{" "}
