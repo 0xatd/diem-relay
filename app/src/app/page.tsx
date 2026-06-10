@@ -29,6 +29,7 @@ type WithdrawMode = 'liquid' | 'unwrap' | 'exit';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address;
 const DAY_SECONDS = 86_400n;
+const CSDIEM_DECIMALS = 24;
 
 function formatToken(value: bigint, decimals = 18, maxFraction = 4) {
   const numeric = Number(formatUnits(value, decimals));
@@ -68,6 +69,14 @@ function parseDiemAmount(value: string) {
   }
 }
 
+function parseCsDiemAmount(value: string) {
+  try {
+    return value.trim() ? parseUnits(value, CSDIEM_DECIMALS) : 0n;
+  } catch {
+    return 0n;
+  }
+}
+
 function secondsUntil(timestamp: bigint) {
   const now = BigInt(Math.floor(Date.now() / 1000));
   return timestamp > now ? timestamp - now : 0n;
@@ -98,7 +107,7 @@ export default function PoolPage() {
   const csdiem = CSDIEM_V2_ADDRESS as Address;
   const spender = mode === 'liquid' ? sdiem : csdiem;
   const parsedDeposit = parseDiemAmount(depositAmount);
-  const parsedRedeem = parseDiemAmount(redeemAmount);
+  const parsedRedeem = parseCsDiemAmount(redeemAmount);
   const parsedWithdraw = parseDiemAmount(withdrawAmount);
   const isBase = chainId === base.id;
 
@@ -159,6 +168,9 @@ export default function PoolPage() {
   const parsedWithdrawInput = withdrawUsesCsdiem ? parsedRedeem : parsedWithdraw;
   const withdrawBalance = withdrawUsesCsdiem ? maxRedeem : sdiemBalance;
   const withdrawToken = withdrawUsesCsdiem ? 'csDIEM' : 'sDIEM';
+  const withdrawBalanceLabel = withdrawUsesCsdiem
+    ? formatToken(withdrawBalance, CSDIEM_DECIMALS)
+    : formatToken(withdrawBalance);
   const depositToken = mode === 'convert' ? 'sDIEM' : 'DIEM';
   const depositBalance = mode === 'convert' ? sdiemBalance : diemBalance;
   const activeAllowance = mode === 'convert' ? sdiemToCsAllowance : mode === 'direct' ? csAllowance : sAllowance;
@@ -414,7 +426,7 @@ export default function PoolPage() {
                           {mode === 'liquid'
                             ? 'sDIEM'
                             : mode === 'convert'
-                              ? `${formatToken(convertPreview)} csDIEM`
+                              ? `${formatToken(convertPreview, CSDIEM_DECIMALS)} csDIEM`
                               : 'csDIEM'}
                         </strong>
                       </div>
@@ -491,7 +503,7 @@ export default function PoolPage() {
                     <div className="pool-input-row pool-input-row-large">
                       <div className="pool-input-meta">
                         <span>Withdraw amount</span>
-                        <span>Balance: {formatToken(withdrawBalance)} {withdrawToken}</span>
+                        <span>Balance: {withdrawBalanceLabel} {withdrawToken}</span>
                       </div>
                       <div className="pool-input-line">
                         <input
@@ -509,7 +521,7 @@ export default function PoolPage() {
                           className="pool-small-button"
                           onClick={() =>
                             withdrawUsesCsdiem
-                              ? setRedeemAmount(formatUnits(maxRedeem, 18))
+                              ? setRedeemAmount(formatUnits(maxRedeem, CSDIEM_DECIMALS))
                               : setWithdrawAmount(formatUnits(sdiemBalance, 18))
                           }
                           type="button"
@@ -632,7 +644,7 @@ export default function PoolPage() {
                   </div>
                   <div>
                     <span>csDIEM</span>
-                    <strong>{formatToken(csBalance)}</strong>
+                    <strong>{formatToken(csBalance, CSDIEM_DECIMALS)}</strong>
                   </div>
                   <div>
                     <span>csDIEM vault</span>
@@ -683,7 +695,7 @@ export default function PoolPage() {
             </div>
             <div>
               <span>csDIEM supply</span>
-              <strong>{formatToken(csTotalSupply)} csDIEM</strong>
+              <strong>{formatToken(csTotalSupply, CSDIEM_DECIMALS)} csDIEM</strong>
             </div>
             <div>
               <span>USDC stream</span>
@@ -705,7 +717,7 @@ export default function PoolPage() {
             </a>
             <a href={DIEMPOOL_URL} rel="noreferrer" target="_blank">
               <strong>DIEMpool.com</strong>
-              <small>Staking interface lineage</small>
+              <small>Staking interface partner</small>
             </a>
           </div>
         </section>
