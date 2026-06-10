@@ -1854,7 +1854,6 @@ body {
 
 .theme-dark .site-nav-link:hover,
 .theme-dark .site-nav-link-active,
-.theme-dark .pool-action-tabs,
 .theme-dark .pool-connect,
 .theme-dark .pool-empty-state,
 .theme-dark .pool-balance-grid div,
@@ -1924,11 +1923,32 @@ body {
   border-color: #272a38;
 }
 
-.theme-dark .pool-action-tabs .pool-action-tab-active,
 .theme-dark .pool-token-tabs .pool-token-tab-active,
 .theme-dark .pool-powered-links a:hover {
   background: #20233a;
   border-color: #6f78ff;
+}
+
+.theme-dark .pool-action-tabs {
+  background: #070811;
+  border: 1px solid #353955;
+  box-shadow: inset 0 0 0 1px rgba(143, 150, 255, 0.08);
+}
+
+.theme-dark .pool-action-tabs button {
+  color: #d7daf0;
+}
+
+.theme-dark .pool-action-tabs button:hover {
+  background: #181b2c;
+  color: #f6f7fb;
+}
+
+.theme-dark .pool-action-tabs .pool-action-tab-active {
+  background: #20233a;
+  border: 1px solid #6f78ff;
+  box-shadow: 0 0 0 1px rgba(111, 120, 255, 0.22), 0 8px 22px rgba(0, 0, 0, 0.28);
+  color: #ffffff;
 }
 
 .theme-dark .pool-input,
