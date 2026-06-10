@@ -1324,6 +1324,20 @@ body {
   font-weight: 800 !important;
 }
 
+.site-connect-button button,
+.site-connect-button [data-rk] button {
+  background: #16915a !important;
+  border: 1px solid #16915a !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.site-connect-button button:hover,
+.site-connect-button [data-rk] button:hover {
+  background: #117848 !important;
+  border-color: #117848 !important;
+}
+
 .theme-toggle {
   align-items: center;
   background: #ffffff;
@@ -1770,6 +1784,9 @@ body {
   background: #ffffff;
   border: 1px solid #e7e8ef;
   border-radius: 14px;
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
   margin-top: 20px;
   padding: 18px 20px;
 }
@@ -1778,6 +1795,7 @@ body {
   color: #9298a8;
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
+  margin-bottom: 12px;
 }
 
 .pool-powered-links a {

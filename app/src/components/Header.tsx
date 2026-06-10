@@ -15,15 +15,6 @@ export function Header() {
           <a className="site-nav-link site-nav-link-active" href="/">
             Stake
           </a>
-          <a className="site-nav-link" href="#earnings">
-            Earnings
-          </a>
-          <a className="site-nav-link" href="#csdiem">
-            csDIEM
-          </a>
-          <a className="site-nav-link" href="#activity">
-            Activity
-          </a>
           <a
             className="site-nav-link"
             href="https://cheaptokens.ai/buy"
@@ -35,7 +26,9 @@ export function Header() {
       </div>
       <div className="site-header-right">
         <ThemeToggle />
-        <ConnectButton />
+        <div className="site-connect-button">
+          <ConnectButton />
+        </div>
       </div>
     </header>
   );

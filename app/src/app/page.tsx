@@ -304,7 +304,7 @@ export default function PoolPage() {
         <section className="pool-hero pool-hero-compact">
           <div>
             <div className="pool-kicker">Staking vault - V2</div>
-            <h1 className="pool-title">Stake Diem, earn the demand</h1>
+            <h1 className="pool-title">Stake Diem, earn USDC</h1>
             <p className="pool-subtitle">
               Every Diem is a perpetual $1 inference credit. Supply yours to the pool and collect
               USDC each time someone buys a day of compute.
