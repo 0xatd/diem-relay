@@ -182,6 +182,17 @@ export const erc20Abi = [
     outputs: [{ name: "", type: "string" }],
     stateMutability: "view",
   },
+  {
+    type: "function",
+    name: "stakedInfos",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [
+      { name: "stakedAmount", type: "uint256" },
+      { name: "cooldownEndTimestamp", type: "uint256" },
+      { name: "pendingUnstakeAmount", type: "uint256" },
+    ],
+    stateMutability: "view",
+  },
 ] as const;
 
 // ── csDIEM ──────────────────────────────────────────────────────────────

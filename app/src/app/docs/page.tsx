@@ -94,8 +94,10 @@ export default function DocsPage() {
           <p>
             Withdrawals run through sDIEM. sDIEM withdraws back to DIEM after Venice&apos;s
             cooldown. The normal path is request, wait about 24 hours, then complete; batched
-            withdrawals can make the practical worst case closer to 48 hours. csDIEM unwraps to
-            sDIEM first, then follows the same path to DIEM.
+            withdrawals can make the practical worst case closer to 48 hours. If only part of a
+            withdrawal is liquid when you complete it, the contract pays what is available and
+            leaves the rest queued until the next Venice cooldown or vault-liquidity update.
+            csDIEM unwraps to sDIEM first, then follows the same path to DIEM.
           </p>
 
           <h2 id="contracts">Contracts</h2>

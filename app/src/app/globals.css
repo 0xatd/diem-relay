@@ -788,7 +788,6 @@ body {
 }
 
 .pool-pending-card {
-  align-items: center;
   border-bottom: 1px solid #2a2a3a;
   display: flex;
   gap: 12px;
@@ -820,6 +819,31 @@ body {
   color: #c8fff4;
   font-size: 12px;
   margin-top: 4px;
+}
+
+.pool-pending-breakdown {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 12px;
+  max-width: 320px;
+}
+
+.pool-pending-breakdown div {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.pool-pending-breakdown span {
+  font-size: 10px;
+}
+
+.pool-pending-breakdown strong {
+  font-size: 13px;
+  margin-top: 3px;
+  text-align: left;
 }
 
 .pool-balance-grid div {
@@ -1866,6 +1890,11 @@ body {
 
 .pool-pending-card small {
   color: #16915a;
+}
+
+.pool-pending-breakdown div {
+  background: #f6f7fb;
+  border-color: #eef0f5;
 }
 
 .pool-rewards-card {

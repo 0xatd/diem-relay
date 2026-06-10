@@ -90,6 +90,10 @@ function formatDuration(seconds: bigint) {
   return `${hours}h ${minutes}m`;
 }
 
+function minBigInt(a: bigint, b: bigint) {
+  return a < b ? a : b;
+}
+
 export default function PoolPage() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -137,6 +141,8 @@ export default function PoolPage() {
       { address: csdiem, abi: csDiemV2Abi, functionName: 'previewDeposit', args: [parsedDeposit] },
       { address: revenueSplitter, abi: revenueSplitterAbi, functionName: 'totalStakerPaid' },
       { address: sdiem, abi: sDiemV2Abi, functionName: 'veniceCooldownEnd' },
+      { address: diem, abi: erc20Abi, functionName: 'balanceOf', args: [sdiem] },
+      { address: diem, abi: erc20Abi, functionName: 'stakedInfos', args: [sdiem] },
     ],
     query: { refetchInterval: 20_000 },
   });
@@ -168,6 +174,9 @@ export default function PoolPage() {
   const convertPreview = read<bigint>(20, 0n);
   const totalUsdcDistributed = read<bigint>(21, 0n);
   const veniceCooldownEnd = read<bigint>(22, 0n);
+  const vaultLiquidDiem = read<bigint>(23, 0n);
+  const vaultStakedInfo = read<readonly [bigint, bigint, bigint]>(24, [0n, 0n, 0n]);
+  const vaultVenicePendingDiem = vaultStakedInfo[2] ?? 0n;
   const circulatingSdiemSupply =
     sdiemTotalSupply > sdiemWrappedSupply ? sdiemTotalSupply - sdiemWrappedSupply : 0n;
   const withdrawUsesCsdiem = withdrawMode !== 'liquid';
@@ -193,17 +202,28 @@ export default function PoolPage() {
   const withdrawalReadyAt = withdrawalStart + DAY_SECONDS;
   const withdrawalWait = secondsUntil(withdrawalReadyAt);
   const veniceWait = secondsUntil(veniceCooldownEnd);
-  const withdrawalStatus = canCompleteWithdraw
-    ? 'ready'
+  const maturedVeniceDiem = veniceWait === 0n ? vaultVenicePendingDiem : 0n;
+  const nextClaimableDiem = withdrawalWait > 0n
+    ? 0n
+    : minBigInt(withdrawalAmount, vaultLiquidDiem + maturedVeniceDiem);
+  const remainingAfterNextClaim = withdrawalAmount > nextClaimableDiem
+    ? withdrawalAmount - nextClaimableDiem
+    : 0n;
+  const withdrawalStatus = nextClaimableDiem >= withdrawalAmount && withdrawalAmount > 0n
+    ? 'Ready to claim'
+    : nextClaimableDiem > 0n
+      ? `${formatToken(nextClaimableDiem)} DIEM claimable now`
     : withdrawalWait > 0n
-      ? `${formatDuration(withdrawalWait)} left`
+      ? `Request timer: ${formatDuration(withdrawalWait)} left`
       : veniceWait > 0n
         ? `Venice cooldown: ${formatDuration(veniceWait)} left`
         : 'Waiting for vault liquidity';
-  const withdrawalSummaryStatus = canCompleteWithdraw
-    ? 'Ready to complete'
+  const withdrawalSummaryStatus = nextClaimableDiem >= withdrawalAmount && withdrawalAmount > 0n
+    ? 'Ready to claim'
+    : nextClaimableDiem > 0n
+      ? `${formatToken(nextClaimableDiem)} DIEM claimable now`
     : withdrawalWait > 0n
-      ? `${formatDuration(withdrawalWait)} remaining`
+      ? `Request timer: ${formatDuration(withdrawalWait)} remaining`
       : veniceWait > 0n
         ? `Venice cooldown: ${formatDuration(veniceWait)} remaining`
         : 'Waiting for vault liquidity';
@@ -570,10 +590,16 @@ export default function PoolPage() {
                       </div>
                       {withdrawalAmount > 0n && (
                         <div className="pool-preview-row">
-                          <span>Queued</span>
+                          <span>Withdrawal queue</span>
                           <strong>
-                            {formatToken(withdrawalAmount)} DIEM - {withdrawalStatus}
+                            {formatToken(withdrawalAmount)} DIEM · {withdrawalStatus}
                           </strong>
+                        </div>
+                      )}
+                      {withdrawalAmount > 0n && nextClaimableDiem > 0n && remainingAfterNextClaim > 0n && (
+                        <div className="pool-preview-row">
+                          <span>After claiming</span>
+                          <strong>{formatToken(remainingAfterNextClaim)} DIEM stays queued</strong>
                         </div>
                       )}
                     </div>
@@ -601,7 +627,7 @@ export default function PoolPage() {
                         onClick={canCompleteWithdraw ? handleCompleteWithdraw : handleCancelWithdraw}
                         type="button"
                       >
-                        {canCompleteWithdraw ? 'Complete withdrawal' : 'Cancel queued withdrawal'}
+                        {canCompleteWithdraw ? 'Claim available DIEM' : 'Cancel queued withdrawal'}
                       </button>
                     )}
                   </>
@@ -641,6 +667,16 @@ export default function PoolPage() {
                       <span>Pending withdrawal</span>
                       <strong>{formatToken(withdrawalAmount)} DIEM</strong>
                       <small>{withdrawalSummaryStatus}</small>
+                      <div className="pool-pending-breakdown">
+                        <div>
+                          <span>Claimable now</span>
+                          <strong>{formatToken(nextClaimableDiem)} DIEM</strong>
+                        </div>
+                        <div>
+                          <span>Still queued</span>
+                          <strong>{formatToken(remainingAfterNextClaim)} DIEM</strong>
+                        </div>
+                      </div>
                     </div>
                     <button
                       className="pool-secondary-action"
@@ -648,7 +684,7 @@ export default function PoolPage() {
                       onClick={canCompleteWithdraw ? handleCompleteWithdraw : handleCancelWithdraw}
                       type="button"
                     >
-                      {canCompleteWithdraw ? 'Complete' : 'Cancel'}
+                      {canCompleteWithdraw ? 'Claim' : 'Cancel'}
                     </button>
                   </div>
                 )}
