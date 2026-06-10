@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const THEME_STORAGE_KEY = "diem-relay-theme";
+const THEME_STORAGE_KEY = "diem-relay-theme-v2";
 type Theme = "light" | "dark";
 
 function getInitialTheme(): Theme {
