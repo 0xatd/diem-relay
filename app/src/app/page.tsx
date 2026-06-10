@@ -667,6 +667,31 @@ export default function PoolPage() {
           </aside>
         </section>
 
+        <section className="pool-vault-totals" aria-label="Vault totals">
+          <div className="pool-vault-totals-header">
+            <span>Vault totals</span>
+            <small>Protocol-wide</small>
+          </div>
+          <div className="pool-vault-totals-grid">
+            <div>
+              <span>Total staked</span>
+              <strong>{formatToken(totalStaked)} DIEM</strong>
+            </div>
+            <div>
+              <span>Compounding vault</span>
+              <strong>{formatToken(csTotalAssets)} sDIEM</strong>
+            </div>
+            <div>
+              <span>USDC stream</span>
+              <strong>{dailyRewardLabel}</strong>
+            </div>
+            <div>
+              <span>Pending harvest</span>
+              <strong>{formatUsd(pendingHarvest)}</strong>
+            </div>
+          </div>
+        </section>
+
         <section className="pool-powered-by" aria-label="Powered by">
           <span>Powered by</span>
           <div className="pool-powered-links">

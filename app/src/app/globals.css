@@ -860,6 +860,75 @@ body {
   font-size: 13px;
 }
 
+.pool-vault-totals {
+  border: 1px solid #2a2a3a;
+  background: rgba(18, 18, 26, 0.86);
+  border-radius: 8px;
+  margin-top: 14px;
+  padding: 16px;
+}
+
+.pool-vault-totals-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pool-vault-totals-header span,
+.pool-vault-totals-header small {
+  display: block;
+}
+
+.pool-vault-totals-header span {
+  color: #f7931a;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pool-vault-totals-header small {
+  color: #9b9bae;
+  font-size: 12px;
+}
+
+.pool-vault-totals-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.pool-vault-totals-grid div {
+  background: rgba(10, 10, 15, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.pool-vault-totals-grid span,
+.pool-vault-totals-grid strong {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pool-vault-totals-grid span {
+  color: #9b9bae;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.pool-vault-totals-grid strong {
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  margin-top: 6px;
+}
+
 .pool-powered-by {
   align-items: center;
   border: 1px solid rgba(247, 147, 26, 0.22);
@@ -1429,7 +1498,8 @@ body {
 .pool-status-card,
 .pool-panel,
 .pool-stat,
-.pool-mechanics-strip div {
+.pool-mechanics-strip div,
+.pool-vault-totals {
   background: #ffffff;
   border: 1px solid #e7e8ef;
   border-radius: 14px;
@@ -1449,6 +1519,8 @@ body {
 .pool-panel-copy,
 .pool-stat span,
 .pool-mechanics-strip span,
+.pool-vault-totals-header small,
+.pool-vault-totals-grid span,
 .pool-input-meta,
 .pool-empty-state,
 .pool-preview-row,
@@ -1780,6 +1852,28 @@ body {
   color: #191c28;
 }
 
+.pool-vault-totals {
+  margin-top: 20px;
+  padding: 18px 20px;
+}
+
+.pool-vault-totals-header span {
+  color: #9298a8;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.pool-vault-totals-grid div {
+  background: #f6f7fb;
+  border: 1px solid #eef0f5;
+  border-radius: 12px;
+}
+
+.pool-vault-totals-grid strong {
+  color: #191c28;
+  font-size: 15px;
+}
+
 .pool-powered-by {
   background: #ffffff;
   border: 1px solid #e7e8ef;
@@ -1844,6 +1938,7 @@ body {
 .theme-dark .pool-rewards-card strong,
 .theme-dark .pool-stat strong,
 .theme-dark .pool-mechanics-strip strong,
+.theme-dark .pool-vault-totals-grid strong,
 .theme-dark .pool-powered-links strong {
   color: #f6f7fb;
 }
@@ -1874,6 +1969,8 @@ body {
 .theme-dark .pool-panel,
 .theme-dark .pool-stat,
 .theme-dark .pool-mechanics-strip div,
+.theme-dark .pool-vault-totals,
+.theme-dark .pool-vault-totals-grid div,
 .theme-dark .pool-token-primer div,
 .theme-dark .pool-powered-by,
 .theme-dark .pool-input-row,
@@ -1901,6 +1998,8 @@ body {
 .theme-dark .pool-balance-grid span,
 .theme-dark .pool-pending-card span,
 .theme-dark .pool-rewards-card span,
+.theme-dark .pool-vault-totals-header small,
+.theme-dark .pool-vault-totals-grid span,
 .theme-dark .pool-powered-links small,
 .theme-dark .pool-powered-by > span {
   color: #a9afc0;
@@ -2013,7 +2112,8 @@ body {
   .pool-app-grid,
   .pool-stats,
   .pool-token-primer,
-  .pool-mechanics-strip {
+  .pool-mechanics-strip,
+  .pool-vault-totals-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2029,6 +2129,7 @@ body {
   .pool-stats,
   .pool-mechanics-strip,
   .pool-token-primer,
+  .pool-vault-totals,
   .pool-powered-by,
   .pool-panel,
   .pool-status-card,
@@ -2091,6 +2192,7 @@ body {
   .pool-stats,
   .pool-mechanics-strip,
   .pool-token-primer,
+  .pool-vault-totals,
   .pool-powered-by,
   .pool-panel,
   .pool-status-card {
@@ -2132,7 +2234,8 @@ body {
   .pool-token-tabs button,
   .pool-stat,
   .pool-token-primer div,
-  .pool-mechanics-strip div {
+  .pool-mechanics-strip div,
+  .pool-vault-totals-grid div {
     max-width: 100% !important;
     width: 100% !important;
   }
@@ -2142,6 +2245,7 @@ body {
   }
 
   .pool-token-tabs-three,
+  .pool-vault-totals-grid,
   .pool-powered-links {
     grid-template-columns: 1fr !important;
   }
