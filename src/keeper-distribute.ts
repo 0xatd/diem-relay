@@ -26,7 +26,8 @@
  *   RPC_URL          - Base JSON-RPC URL (required)
  *   KEEPER_KEY       - Hot-wallet private key, gas-only (required)
  *   SPLITTER_ADDRESS - RevenueSplitter (default: 0xd185138CEA135E60CA6E567BE53DEC81D89Ce7D6)
- *   CSDIEM_ADDRESS   - csDIEM vault. If unset, harvest step is skipped silently.
+ *   CSDIEM_ADDRESS    - csDIEM v1 vault. If unset, v1 harvest is skipped.
+ *   CSDIEM_V2_ADDRESS - csDIEM v2 vault. If unset, v2 harvest is skipped.
  *   USDC_ADDRESS     - USDC token (default: Base USDC)
  *   MAX_BASEFEE_GWEI - Skip both steps if Base base fee > this (default: 5)
  *   DRY_RUN          - "1" to simulate only (no tx sent)
@@ -59,6 +60,7 @@ const KEEPER_KEY = process.env.KEEPER_KEY ?? "";
 const SPLITTER_ADDRESS = (process.env.SPLITTER_ADDRESS ??
   "0xd185138CEA135E60CA6E567BE53DEC81D89Ce7D6") as Address;
 const CSDIEM_ADDRESS = (process.env.CSDIEM_ADDRESS ?? "") as Address | "";
+const CSDIEM_V2_ADDRESS = (process.env.CSDIEM_V2_ADDRESS ?? "") as Address | "";
 const USDC_ADDRESS = (process.env.USDC_ADDRESS ??
   "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913") as Address;
 const MAX_BASEFEE_GWEI = Number(process.env.MAX_BASEFEE_GWEI ?? "5");
@@ -154,34 +156,37 @@ async function readHarvestState(csdiem: Address): Promise<HarvestState> {
 /**
  * Returns true on tx success, false on skip or non-fatal failure.
  * Pings /harvest-fail on revert. Never throws.
+ *
+ * `label` distinguishes v1 vs v2 harvests in logs and healthcheck pings so a
+ * v2-only outage doesn't mask a healthy v1 (or vice-versa).
  */
-async function runHarvest(): Promise<boolean> {
-  if (!CSDIEM_ADDRESS) {
-    log("harvest: CSDIEM_ADDRESS unset — skipping");
+async function runHarvest(csdiem: Address | "", label: string): Promise<boolean> {
+  if (!csdiem) {
+    log(`harvest[${label}]: address unset — skipping`);
     return false;
   }
 
   let state: HarvestState;
   try {
-    state = await readHarvestState(CSDIEM_ADDRESS);
+    state = await readHarvestState(csdiem);
   } catch (e) {
-    logErr(`harvest: state read failed: ${errMsg(e)}`);
-    await pingHealthcheck("/harvest-fail");
+    logErr(`harvest[${label}]: state read failed: ${errMsg(e)}`);
+    await pingHealthcheck(`/harvest-${label}-fail`);
     return false;
   }
 
   log(
-    `harvest state: pending=${formatUnits(state.pending, 6)} USDC ` +
+    `harvest[${label}] state: pending=${formatUnits(state.pending, 6)} USDC ` +
       `min=${formatUnits(state.minHarvest, 6)} paused=${state.paused}`,
   );
 
   if (state.paused) {
-    log("harvest skip: csDIEM paused");
+    log(`harvest[${label}] skip: csDIEM paused`);
     return false;
   }
   if (state.pending < state.minHarvest) {
     log(
-      `harvest skip: pending ${formatUnits(state.pending, 6)} ` +
+      `harvest[${label}] skip: pending ${formatUnits(state.pending, 6)} ` +
         `< minHarvest ${formatUnits(state.minHarvest, 6)}`,
     );
     return false;
@@ -192,38 +197,38 @@ async function runHarvest(): Promise<boolean> {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + HARVEST_DEADLINE_SECS);
 
   if (DRY_RUN) {
-    log(`harvest dry-run: would call csDIEM.harvest(deadline=${deadline})`);
+    log(`harvest[${label}] dry-run: would call csDIEM.harvest(deadline=${deadline})`);
     return true;
   }
 
   try {
     await pub.simulateContract({
       account,
-      address: CSDIEM_ADDRESS as Address,
+      address: csdiem,
       abi: CSDIEM_ABI,
       functionName: "harvest",
       args: [deadline],
     });
 
     const hash = await wallet.writeContract({
-      address: CSDIEM_ADDRESS as Address,
+      address: csdiem,
       abi: CSDIEM_ABI,
       functionName: "harvest",
       args: [deadline],
     });
-    log(`harvest tx sent: ${hash} deadline=${deadline}`);
+    log(`harvest[${label}] tx sent: ${hash} deadline=${deadline}`);
 
     const receipt = await pub.waitForTransactionReceipt({ hash, timeout: 90_000 });
     if (receipt.status !== "success") {
-      logErr(`harvest tx reverted: ${hash}`);
-      await pingHealthcheck("/harvest-fail");
+      logErr(`harvest[${label}] tx reverted: ${hash}`);
+      await pingHealthcheck(`/harvest-${label}-fail`);
       return false;
     }
-    log(`harvest confirmed block=${receipt.blockNumber} gas_used=${receipt.gasUsed}`);
+    log(`harvest[${label}] confirmed block=${receipt.blockNumber} gas_used=${receipt.gasUsed}`);
     return true;
   } catch (e) {
-    logErr(`harvest failed: ${errMsg(e)}`);
-    await pingHealthcheck("/harvest-fail");
+    logErr(`harvest[${label}] failed: ${errMsg(e)}`);
+    await pingHealthcheck(`/harvest-${label}-fail`);
     return false;
   }
 }
@@ -329,7 +334,8 @@ async function runDistribute(): Promise<boolean> {
 async function main(): Promise<void> {
   log(
     `keeper=${account.address} splitter=${SPLITTER_ADDRESS} ` +
-      `csdiem=${CSDIEM_ADDRESS || "<unset>"} dry_run=${DRY_RUN}`,
+      `csdiem_v1=${CSDIEM_ADDRESS || "<unset>"} ` +
+      `csdiem_v2=${CSDIEM_V2_ADDRESS || "<unset>"} dry_run=${DRY_RUN}`,
   );
 
   // Global preflight: gas price and keeper balance.
@@ -343,18 +349,27 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Step 1: harvest first — claim previous 24h's accrued USDC, swap, restake.
-  const harvestOk = await runHarvest();
+  // Step 1: harvest v1 and v2 — claim previous 24h's accrued USDC, swap, restake.
+  // Each call is self-isolated (try/catch + skip-conditions inside runHarvest),
+  // so a v2 hiccup never blocks v1 and vice-versa during the migration window.
+  const harvestV1Ok = await runHarvest(CSDIEM_ADDRESS, "v1");
+  const harvestV2Ok = await runHarvest(CSDIEM_V2_ADDRESS, "v2");
 
-  // Step 2: distribute second — push the next 24h batch into sDIEM.
-  // Runs regardless of harvest outcome (independent skip + try/catch isolation).
+  // Step 2: distribute — push the next 24h batch into sDIEM v1 (operator).
+  // RevenueSplitter still points at sDIEM v1 during the migration window;
+  // sDIEM v2 is seeded manually by the Safe until cutover.
   const distributeOk = await runDistribute();
 
-  if (!harvestOk && !distributeOk) {
-    log("done: both steps no-op or skipped");
+  const anyOk = harvestV1Ok || harvestV2Ok || distributeOk;
+  if (!anyOk) {
+    log("done: all steps no-op or skipped");
     await pingHealthcheck("/0");
   } else {
-    log(`done: harvest=${harvestOk ? "ok" : "skip/fail"} distribute=${distributeOk ? "ok" : "skip/fail"}`);
+    log(
+      `done: harvest_v1=${harvestV1Ok ? "ok" : "skip/fail"} ` +
+        `harvest_v2=${harvestV2Ok ? "ok" : "skip/fail"} ` +
+        `distribute=${distributeOk ? "ok" : "skip/fail"}`,
+    );
     await pingHealthcheck();
   }
 }

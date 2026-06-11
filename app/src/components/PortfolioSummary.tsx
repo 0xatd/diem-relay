@@ -4,23 +4,29 @@ import { useAccount } from "wagmi";
 import { useSDiem } from "@/hooks/useSDiem";
 import { useDiemToken } from "@/hooks/useDiemToken";
 import { useCSDiem, isCSDiemDeployed } from "@/hooks/useCSDiem";
+import { useContracts } from "@/hooks/useContracts";
 import { formatDiem, formatUsdc } from "@/lib/format";
 
 export function PortfolioSummary() {
   const { isConnected } = useAccount();
+  const { isV2 } = useContracts();
   const { userStaked, earned } = useSDiem();
   const { balance } = useDiemToken();
   const { userShares, userAssetsValue } = useCSDiem();
 
   if (!isConnected) return null;
 
+  const sLabel = "Staked (sDIEM)";
+  const csLabel = "Wrapped (csDIEM)";
+  const csAvailable = isV2 || isCSDiemDeployed;
+
   const stats = [
     { label: "Wallet", value: `${formatDiem(balance)} DIEM` },
-    { label: "Staked (sDIEM)", value: `${formatDiem(userStaked)} DIEM` },
-    ...(isCSDiemDeployed
+    { label: sLabel, value: `${formatDiem(userStaked)} DIEM` },
+    ...(csAvailable
       ? [
           {
-            label: "Wrapped (csDIEM)",
+            label: csLabel,
             value: `${formatDiem(userShares)} csDIEM`,
             sub: `${formatDiem(userAssetsValue)} DIEM`,
           },
